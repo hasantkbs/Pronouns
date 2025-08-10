@@ -1,0 +1,12 @@
+torch
+torchaudio
+soundfile
+transformers
+sounddevice
+numpy
+scikit-learn
+pytest
+noisereduce
+scipy
+audiomentations
+
