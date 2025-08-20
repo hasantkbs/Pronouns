@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # --- Genel Ayarlar ---
-USER_ID = "user_001"
+USER_ID = "speech_commands_test"
 BASE_PATH = "users"
 
 # --- Embedding Model Ayarları ---
