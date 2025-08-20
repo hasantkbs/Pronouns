@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual Environment
+venv/
+
+# OS-specific
+.DS_Store
+
+# Data - IGNORE AUDIO FILES
+asr_data/audio/
+
+# Old project data and artifacts
+/users/
+/external_datasets/
+/embeddings/
+*.pth
+label_encoder.json
+meta.json
