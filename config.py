@@ -1,22 +1,19 @@
 # -*- coding: utf-8 -*-
+"""
+Konuşma Bozukluğu Ses Tanıma Sistemi - Yapılandırma Dosyası
+"""
 
-# --- Genel Ayarlar ---
-USER_ID = "speech_commands_test"
-BASE_PATH = "users"
+# --- ASR Model Ayarları ---
+MODEL_NAME = "facebook/wav2vec2-large-960h"  # Varsayılan model
+ORNEKLEME_ORANI = 16000  # Hz
 
-# --- Embedding Model Ayarları ---
-MODEL_NAME = "facebook/wav2vec2-large-960h"
-ORNEKLEME_ORANI = 16000
+# --- Dil Modeli Ayarları (Opsiyonel) ---
+# Daha yüksek doğruluk için KenLM dil modeli kullanılabilir
+KENLM_MODEL_PATH = "data/models/language_model/lm.binary"
 
-# --- Sınıflandırıcı Eğitim Ayarları ---
-EMBEDDING_DIM = 1024  # Wav2Vec2-Base modelinin çıktı boyutu
-HIDDEN_DIM = 256
-NUM_EPOCHS = 150
-BATCH_SIZE = 16
-LEARNING_RATE = 0.001
-TEST_SIZE = 0.35 # Test verisi oranı
-MIN_SAMPLES_PER_CLASS = 3 # Bir sınıfın eğitime dahil edilmesi için gereken minimum örnek sayısı
+# --- Ses Kayıt Ayarları ---
+KAYIT_SURESI_SN = 5  # Varsayılan kayıt süresi (saniye)
+SES_ESIK_DEGERI = 0.01  # Ses aktivitesi için hassasiyet eşiği
 
-# --- Gerçek Zamanlı Tanıma Ayarları ---
-KAYIT_SURESI_SN = 2  # Saniye cinsinden kayıt süresi
-SES_ESIK_DEGERI = 0.01 # Ses aktivitesi için hassasiyet eşiği
+# --- Sistem Ayarları ---
+GECICI_DOSYA_YOLU = "temp_recording.wav"  # Geçici ses dosyası

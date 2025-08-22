@@ -1,75 +1,241 @@
-# Konusma Anlama ve Tanıma Sistemi 
+# Speech Disorder Recognition System
 
-Bu proje, `Wav2Vec2` modeli kullanarak ses dosyalarından kelime embedding'leri üreten, bu embedding'ler ile bir sınıflandırıcı eğiten ve sonuçta ses verisinden kelime tahmini yapan bir sistemdir.
+This project is a **simple and focused system** specially designed for **individuals with speech disorders** to recognize their speech and convert it to text. The system uses a `Wav2Vec2`-based ASR (Automatic Speech Recognition) model for speech-to-text conversion.
 
-## Proje Akışı
+## 🎯 Project Purpose
 
-1.  **Veri Hazırlığı:** `users/user_001/` klasörüne `kelime_1.wav`,`kelime_2.wav` formatında ses dosyaları eklenir.
-2.  **Kalibrasyon (`01_calibrate.py`):** Ses dosyalarını tarayarak hangi ses dosyasının hangi kelimeye ait olduğunu belirten bir `meta.json` dosyası oluşturur.
-3.  **Embedding Üretimi (`02_generate_embeddings.py`):** Her ses dosyası için önceden eğitilmiş `Wav2Vec2` modelini kullanarak bir embedding (özellik vektörü) çıkarır ve bunları `embeddings/` klasörüne kaydeder.
-4.  **Model Eğitimi (`train_classifier.py`):** Üretilen embedding'leri ve etiketleri kullanarak kelimeleri sınıflandıracak basit bir sinir ağı modelini eğitir. Eğitilmiş modeli (`classifier_model.pth`) ve etiket listesini (`label_encoder.json`) kaydeder.
-5.  **Tanıma (`03_realtime_recognition.py`):** Eğitilen modeli ve yeni ses verisini kullanarak kelime tahmini yapar.
+For individuals with speech disorders:
+- **Convert speech to text**
+- **Transform conversations into written form**
+- **Facilitate communication**
+- **Increase independence**
 
-## Kurulum
+## 🏗️ System Architecture
 
-Proje bağımlılıklarını yüklemek için aşağıdaki komutu çalıştırın:
+The system has a simple and focused structure:
 
+1. **Audio Recording:** Records audio using microphone
+2. **Speech Recognition:** Converts speech to text using Wav2Vec2 model
+3. **Text Output:** Displays the recognized text on screen
+
+## 📁 Project Structure
+
+```
+konusma_anlama_sistemi/
+├── src/                    # Source code
+│   ├── core/              # Core components
+│   │   └── asr.py         # Speech recognition system
+│   └── utils/             # Utility tools
+│       └── utils.py       # Audio recording functions
+├── data/                  # Data files
+│   └── models/           # Trained models
+├── downloaded_data/       # Training data (48K+ audio files)
+├── app.py                # Main application
+├── config.py             # Configuration
+├── train_model.py        # Model training
+├── analyze_data.py       # Dataset analysis
+└── requirements.txt      # Dependencies
+```
+
+## 🚀 Installation
+
+### 1. Create Conda Environment
+
+```bash
+# Create new conda environment
+conda create -n pronouns python=3.9
+conda activate pronouns
+
+# Install project dependencies
 pip install -r requirements.txt
+```
 
-## Kullanım
+### 2. Language Model Installation (Optional)
 
-Scriptleri aşağıdaki sırayla çalıştırın:
+For higher accuracy, you can install KenLM language model:
 
-python 01_calibrate.py
-python 02_generate_embeddings.py
-python train_classifier.py
-python 03_realtime_recognition.py
+```bash
+# Create language model directory
+mkdir -p data/models/language_model
 
-# Konuşma Anlama ve Tanıma Sistemi
+# Download KenLM model and place in data/models/language_model/ folder
+# Update KENLM_MODEL_PATH in config.py
+```
 
-Bu proje, `Wav2Vec2` modeli kullanarak ses dosyalarından kelime embedding'leri üreten, bu embedding'ler ile bir sınıflandırıcı eğiten ve sonuçta ses verisinden kelime tahmini yapan bir sistemdir. Proje, modüler bir yapıda tasarlanmış olup, veri toplama, analiz, eğitim ve test süreçleri için yardımcı araçlar içerir.
+## 🎮 Usage
 
-## Dosyalar ve Görevleri
+To start the system:
 
-Proje, belirli bir akışa göre çalışan bir dizi script'ten oluşur:
+```bash
+python app.py
+```
 
-### Veri Yönetimi Araçları
+### How it Works:
 
-- **`collect_new_data.py`**: **(Veri Toplama Yardımcısı)** Yeni ses verisi toplama sürecini otomatikleştiren bir araçtır. Kullanıcıdan bir kelime alır, ses kaydı yapar ve dosyayı otomatik olarak doğru formatta ( `kelime_X.wav`) isimlendirerek kaydeder.
+1. **Press ENTER** - Audio recording starts
+2. **Speak** - You can speak for 5 seconds
+3. **See the result** - Recognized text appears on screen
+4. **To exit** - Say "çık" or "exit"
 
-- **`analyze_data_distribution.py`**: **(Veri Analiz Aracı)** `meta.json` dosyasını okuyarak veri setindeki her bir kelimenin (etiketin) kaç adet ses örneğine sahip olduğunu analiz eder ve raporlar. Veri setindeki dengesizlikleri ve zayıf noktaları tespit etmek için kullanılır.
+### Example Usage:
 
-- **`00_cleanup_augmented_data.py`**: Veri artırma (augmentation) ile oluşturulmuş sentetik dosyaları (`_aug` içerenler) temizlemek için kullanılır.
+```
+=========================================
+   Speech Disorder Recognition System   
+=========================================
+This system recognizes speech from individuals
+with speech disorders and converts it to text.
+Say 'çık' or 'exit' to quit.
 
-### Ana İşlem Akışı Script'leri
+------------------------------------------
+🎤 Press ENTER to speak and start recording...
+🔴 Recording started - You can speak now...
+🟢 Recording completed!
+💾 Audio file saved: temp_recording.wav
 
-- **`01_calibrate.py`**: `users/user_001/` klasöründeki ses dosyalarını tarayarak hangi ses dosyasının hangi kelimeye ait olduğunu belirten bir `meta.json` dosyası oluşturur.
+🧠 Analyzing your speech...
 
-- **`02_generate_embeddings.py`**: Her ses dosyası için `Wav2Vec2` modelini kullanarak bir embedding (özellik vektörü) çıkarır ve bunları `embeddings/` klasörüne kaydeder.
+📝 Recognized Text:
+   'hello how are you'
+```
 
-- **`train_classifier.py`**: Üretilen embedding'leri ve etiketleri kullanarak kelimeleri sınıflandıracak sinir ağı modelini eğitir. Eğitim sonunda en iyi modeli (`classifier_model.pth`) ve etiket listesini ( `label_encoder.json`) kaydeder.
+## 🔧 Model Training
 
-- **`03_realtime_recognition.py`**: Eğitilen modeli ve test ses dosyalarını kullanarak kelime tahmini yapar ve modelin performansını değerlendirir.
+### Dataset Analysis
 
-### Yardımcı Modüller ve Klasörler
+To analyze the existing dataset:
 
-- **`config.py`**: Model adı, öğrenme oranı, dosya yolları gibi tüm proje ayarlarının ve hiperparametrelerin bulunduğu merkezi yapılandırma dosyası.
+```bash
+python analyze_data.py
+```
 
-- **`utils.py`**: Model yükleme, embedding üretme gibi tekrar eden ve projenin farklı yerlerinde kullanılan yardımcı fonksiyonları ve sınıfları içerir.
+**Available Dataset:**
+- 🎵 **48,365 audio files** (Turkish)
+- 📄 **6 metadata files** (Parquet format)
+- 📊 **Train:** 32,802 files
+- 📊 **Test:** 11,035 files
+- 📊 **Validation:** Available
 
-- **`tests/`**: Projenin modüllerinin doğru çalıştığını kontrol eden `pytest` testlerini içerir.
+### Model Training
 
-## Önerilen Kullanım Akışı
+To train your own model:
 
-1.  **Veri Toplama:** `python collect_new_data.py` script'ini kullanarak her kelime için yeterli sayıda (tavsiye edilen en az 15-20) ses kaydı yapın.
+```bash
+# Model training (GPU recommended)
+python train_model.py
+```
 
-2.  **Veri Analizi:** `python analyze_data_distribution.py` script'i ile veri setinizin mevcut durumunu kontrol edin.
+**Training Parameters:**
+- **Epochs:** 3
+- **Batch Size:** 8
+- **Learning Rate:** 1e-4
+- **Model:** Wav2Vec2 Large 960h
 
-3.  **Kalibrasyon:** `python 01_calibrate.py` ile `meta.json` dosyasını oluşturun/güncelleyin.
+### Using Trained Model
 
-4.  **Embedding Üretimi:** `python 02_generate_embeddings.py` ile tüm ses dosyaları için embedding'leri üretin. (Bu işlem uzun sürebilir).
+After training is complete:
 
-5.  **Model Eğitimi:** `python train_classifier.py` ile sınıflandırıcı modelinizi eğitin ve test doğruluğunu gözlemleyin.
+1. Update model path in `config.py`:
+   ```python
+   MODEL_NAME = "./trained_model"
+   ```
 
-6.  **Test (Opsiyonel):** `pytest` komutunu çalıştırarak projenin temel fonksiyonlarının doğru çalıştığından emin olun.
+2. Restart the system:
+   ```bash
+   python app.py
+   ```
 
+## 🧪 Testing
+
+To test the system:
+
+```bash
+# Dataset analysis
+python analyze_data.py
+
+# Audio recording test
+python src/utils/utils.py
+
+# ASR system test (if torch is installed)
+python src/core/asr.py
+```
+
+## ⚙️ Configuration
+
+You can change settings in `config.py`:
+
+```python
+# ASR Model Settings
+MODEL_NAME = "facebook/wav2vec2-large-960h"  # Change model
+SAMPLING_RATE = 16000  # Hz
+
+# Audio Recording Settings
+RECORDING_DURATION_SEC = 5  # Change recording duration
+```
+
+## 🎯 Features
+
+### ✅ Current Features:
+- **Simple and focused** interface
+- **High accuracy** speech recognition
+- **Turkish** language support
+- **Real-time** audio processing
+- **Easy to use** - just ENTER + speak
+- **Rich dataset** - 48K+ Turkish audio files
+- **Model training** - You can train your own model
+
+### 🔄 Future Features:
+- **Personalized** model training
+- **Voice response** system
+- **Web interface**
+- **Mobile application**
+
+## 📝 Development
+
+### Adding New Model:
+
+1. Change model name in `config.py`:
+   ```python
+   MODEL_NAME = "new/model/name"
+   ```
+
+2. The system will automatically use the new model.
+
+### Adding New Feature:
+
+1. Create new module in `src/core/`
+2. Integrate in `app.py`
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/new-feature`)
+3. Commit changes (`git commit -am 'New feature added'`)
+4. Push to branch (`git push origin feature/new-feature`)
+5. Create Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🙏 Acknowledgments
+
+- Mozilla Common Voice project
+- Hugging Face Transformers library
+- Wav2Vec2 model developers
+
+## ⚠️ Important Notes
+
+### Dataset
+- This repository **does not contain audio files**
+- Training data must be provided separately
+- Personal audio data is not included for privacy reasons
+
+### Model Training
+- GPU usage is recommended
+- Sufficient disk space required for large datasets
+- Training time depends on dataset size
+
+---
+
+**Note:** This project is developed to improve the quality of life for individuals with speech disorders.

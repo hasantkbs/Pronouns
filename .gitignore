@@ -1,20 +1,122 @@
-# Python
-__pycache__/
-*.pyc
+# Konuşma Bozukluğu Ses Tanıma Sistemi - .gitignore
 
-# Virtual Environment
-venv/
+# === Ses Dosyaları ve Büyük Veri Setleri ===
+# Bu dosyalar çok büyük olduğu için GitHub'a push edilmez
+downloaded_data/
+asr_data/
+asr_model/
+asr_model_finetuned/
+external_datasets/
+data/audio/
+data/models/
+data/users/
 
-# OS-specific
-.DS_Store
+# === Ses Dosya Formatları ===
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.aac
+*.ogg
 
-# Data - IGNORE AUDIO FILES
-asr_data/audio/
+# === Büyük Veri Dosyaları ===
+*.parquet
+*.tar
+*.zip
+*.gz
+*.bz2
 
-# Old project data and artifacts
-/users/
-/external_datasets/
-/embeddings/
+# === Model Dosyaları ===
+*.safetensors
+*.bin
+*.pt
 *.pth
-label_encoder.json
-meta.json
+*.ckpt
+*.h5
+*.hdf5
+
+# === Geçici Dosyalar ===
+temp_recording.wav
+test_recording.wav
+*.tmp
+*.temp
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# === Virtual Environments ===
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === OS ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === Logs ===
+*.log
+logs/
+
+# === Jupyter Notebook ===
+.ipynb_checkpoints
+
+# === Environment Variables ===
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# === Eğitim Çıktıları ===
+trained_model/
+checkpoints/
+runs/
+wandb/
+
+# === Test Dosyaları ===
+test_*.wav
+temp_*.wav
+
+# === Kullanıcı Verileri ve Dokümanlar ===
+# Kullanıcıya özel veriler ve dokümanlar gizlilik nedeniyle dahil edilmemiştir.
+data/users/**/*.json
+data/users/**/*.docx
+
+# === Özel Not ===
+# Bu proje konuşma bozukluğu olan bireyler için ses tanıma sistemi içerir.
+# Ses dosyaları ve büyük veri setleri gizlilik nedeniyle dahil edilmemiştir.
+# Model eğitimi için gerekli veriler ayrı olarak sağlanmalıdır.
