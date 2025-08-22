@@ -1,5 +1,3 @@
-
-
 # -*- coding: utf-8 -*-
 import os
 import sys
@@ -13,16 +11,24 @@ import dataclasses
 from typing import Dict, List, Optional, Union
 
 # --- Global Değişkenler ---
-# İşlemciyi (processor) global olarak tanımla ki map fonksiyonu içinden erişilebilsin
-processor = None
+# processor artık global değil, fonksiyonlara argüman olarak geçecek
 
 # --- Veri Kümesi Hazırlama ---
 
-def prepare_dataset(batch):
+def update_audio_paths(batch, split_name):
+    """
+    Common Voice dataset'indeki ses dosyası yollarını günceller.
+    """
+    # Assuming audio files are in downloaded_data/train/audio/ or downloaded_data/validation/audio/
+    # and the 'path' in the dataset is just the filename (e.g., "common_voice_tr_12345.mp3")
+    base_audio_dir = os.path.join("downloaded_data", split_name, "audio")
+    batch["audio"]["path"] = os.path.join(base_audio_dir, os.path.basename(batch["path"]))
+    return batch
+
+def prepare_dataset(batch, processor: Wav2Vec2Processor): # processor argüman olarak eklendi
     """
     Ses verisini işler ve metin transkriptlerini modelin anlayacağı formata getirir.
     """
-    global processor
     audio = batch["audio"]
     batch["input_values"] = processor(audio["array"], sampling_rate=audio["sampling_rate"]).input_values[0]
     batch["input_length"] = len(batch["input_values"])
@@ -71,10 +77,11 @@ class DataCollatorCTCWithPadding:
 # --- Ana Eğitim Fonksiyonu ---
 
 def main():
-    global processor # Global işlemciyi kullan
+    # processor artık global değil
     
     # 1. İşlemciyi (Processor) Yükle
     print(f"'{config.MODEL_NAME}' için işlemci yükleniyor...")
+    processor = Wav2Vec2Processor.from_pretrained(config.MODEL_NAME)
 
     # 2. Veri Setini Yükle
     # Veri setinin şemasını manuel olarak tanımla
@@ -94,14 +101,20 @@ def main():
     })
 
     print("Yerel Parquet dosyaları için yollar tanımlanıyor...")
-    train_path = "downloaded_data/train/0000.parquet"
-    validation_path = "downloaded_data/valudation/0000.parquet" # Düzeltilmiş yazım hatası
+    train_parquet_path = "downloaded_data/train/0000.parquet"
+    validation_parquet_path = "downloaded_data/validation/0000.parquet" # Düzeltilmiş yazım hatası
 
-    print(f"Train yolu kontrol ediliyor: {train_path}")
-    print(f"Validation yolu kontrol ediliyor: {validation_path}")
+    print(f"Train yolu kontrol ediliyor: {train_parquet_path}")
+    print(f"Validation yolu kontrol ediliyor: {validation_parquet_path}")
 
-    if not os.path.exists(train_path) or not os.path.exists(validation_path):
-        raise FileNotFoundError("Lütfen 'downloaded_data' klasörünüzdeki Parquet dosyalarının doğru yolda ve isimde olduğundan emin olun. Beklenen yollar: downloaded_data/train/0000.parquet ve downloaded_data/valudation/0000.parquet")
+    if not os.path.exists(train_parquet_path) or not os.path.exists(validation_parquet_path):
+        raise FileNotFoundError("Lütfen 'downloaded_data' klasörünüzdeki Parquet dosyalarının doğru yolda ve isimde olduğundan emin olun. Beklenen yollar: downloaded_data/train/0000.parquet ve downloaded_data/validation/0000.parquet")
+
+    # data_files değişkeni tanımlandı
+    data_files = {
+        "train": train_parquet_path,
+        "validation": validation_parquet_path,
+    }
 
     print("Parquet dosyaları yükleniyor (load_dataset çağrısı)...")
     common_voice_dict = load_dataset("parquet", data_files=data_files, features=features)
@@ -112,7 +125,7 @@ def main():
     # Ses dosyalarının doğru yollarını ayarlama
     print("Ses dosyası yolları güncelleniyor...")
     train_dataset = train_dataset.map(lambda batch: update_audio_paths(batch, "train"))
-    eval_dataset = eval_dataset.map(lambda batch: update_audio_paths(batch, "valudation")) # 'valudation' yazım hatası
+    eval_dataset = eval_dataset.map(lambda batch: update_audio_paths(batch, "validation")) # 'validation' yazım hatası düzeltildi
 
     # 3. Veri Setini Ön İşle
     print("Veri seti temizleniyor ve ön işleniyor...")
@@ -122,8 +135,9 @@ def main():
     train_dataset = train_dataset.cast_column("audio", Audio(sampling_rate=16000))
     eval_dataset = eval_dataset.cast_column("audio", Audio(sampling_rate=16000))
 
-    train_dataset = train_dataset.map(prepare_dataset, remove_columns=train_dataset.column_names)
-    eval_dataset = eval_dataset.map(prepare_dataset, remove_columns=eval_dataset.column_names)
+    # prepare_dataset'e processor argümanı eklendi
+    train_dataset = train_dataset.map(lambda batch: prepare_dataset(batch, processor), remove_columns=train_dataset.column_names)
+    eval_dataset = eval_dataset.map(lambda batch: prepare_dataset(batch, processor), remove_columns=eval_dataset.column_names)
     
     print("Veri seti eğitime hazır.")
 
@@ -163,7 +177,8 @@ def main():
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
-        processor=processor,
+        tokenizer=processor.feature_extractor,  # feature_extractor verilebilir
+        # compute_metrics=compute_metrics, # compute_metrics burada tanımlı değil, train_asr.py'de var
     )
 
     # 8. Eğitimi Başlat
@@ -175,4 +190,3 @@ def main():
     trainer.save_model(config.FINETUNE_OUTPUT_DIR)
     processor.save_pretrained(config.FINETUNE_OUTPUT_DIR)
     print(f"Model başarıyla '{config.FINETUNE_OUTPUT_DIR}' klasörüne kaydedildi.")
-

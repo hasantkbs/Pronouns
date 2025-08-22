@@ -11,30 +11,47 @@ import config
 
 # --- Ses Kayıt Fonksiyonu ---
 
-def record_audio(file_path: str = "temp_recording.wav", record_seconds: int = 5, prompt: str = None) -> str:
+# -*- coding: utf-8 -*-
+import pyaudio
+import wave
+import numpy as np
+import threading
+import time
+import sys
+import os
+import math # Added for RMS calculation
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+import config
+
+# --- Ses Kayıt Fonksiyonu ---
+
+def record_audio(file_path: str = config.GECICI_DOSYA_YOLU, record_seconds: int = config.KAYIT_SURESI_SN, prompt: str = None) -> str:
     """
     Mikrofon kullanarak ses kaydı yapar ve dosyaya kaydeder.
     Konuşma bozukluğu olan bireyler için optimize edilmiştir.
+    Ses aktivitesi algılama (VAD) içerir.
 
     Args:
         file_path (str): Kaydedilecek ses dosyasının yolu
-        record_seconds (int): Kayıt süresi (saniye)
+        record_seconds (int): Kayıt süresi (saniye). Bu süre, ses algılandıktan sonraki aktif konuşma süresidir.
         prompt (str): Kullanıcıya gösterilecek mesaj
 
     Returns:
         str: Kaydedilen ses dosyasının yolu
     """
-    # Kayıt ayarları
+    # Kayıt ayarları config dosyasından alınır
     FORMAT = pyaudio.paInt16
     CHANNELS = 1  # Mono
-    RATE = 16000  # 16kHz
+    RATE = config.ORNEKLEME_ORANI
     CHUNK = 1024
     
-    # PyAudio nesnesini oluştur
+    # VAD ayarları
+    SOUND_THRESHOLD = config.SES_ESIK_DEGERI
+    SILENCE_LIMIT_SECONDS = 1.5 # Konuşma bittikten sonra ne kadar sessizlik beklenmeli
+    
     audio = pyaudio.PyAudio()
     
     try:
-        # Stream'i aç
         stream = audio.open(
             format=FORMAT,
             channels=CHANNELS,
@@ -43,21 +60,47 @@ def record_audio(file_path: str = "temp_recording.wav", record_seconds: int = 5,
             frames_per_buffer=CHUNK
         )
         
-        # Kullanıcıya bilgi ver
         if prompt:
             print(prompt)
         else:
-            print(f"🎤 {record_seconds} saniye ses kaydı başlıyor...")
+            print(f"🎤 Ses kaydı başlıyor. Konuşma algılandığında kayıt başlayacak...")
         
-        print("🔴 Kayıt başladı - Konuşabilirsiniz...")
+        print("🔴 Dinleniyor... Konuşmaya başlayın.")
         
         frames = []
+        speaking = False
+        silence_start_time = None
         
-        # Ses kaydı
-        for i in range(0, int(RATE / CHUNK * record_seconds)):
+        start_time = time.time()
+        
+        while True:
             try:
                 data = stream.read(CHUNK, exception_on_overflow=False)
-                frames.append(data)
+                audio_data = np.frombuffer(data, dtype=np.int16)
+                rms = math.sqrt(np.mean(audio_data**2))
+                
+                if rms > SOUND_THRESHOLD * 32767: # Normalize threshold to 16-bit audio range
+                    if not speaking:
+                        print("🗣️ Konuşma algılandı, kayıt başladı!")
+                        speaking = True
+                        silence_start_time = None
+                    frames.append(data)
+                elif speaking:
+                    frames.append(data) # Keep recording for a short silence period
+                    if silence_start_time is None:
+                        silence_start_time = time.time()
+                    elif (time.time() - silence_start_time) > SILENCE_LIMIT_SECONDS:
+                        print(f"Silence detected for {SILENCE_LIMIT_SECONDS} seconds. Stopping recording.")
+                        break # Stop if silence limit reached after speaking
+                
+                # Stop recording after max duration if no speech detected or if speech has been ongoing
+                if speaking and (time.time() - start_time) > record_seconds + SILENCE_LIMIT_SECONDS:
+                    print(f"Max recording duration ({record_seconds}s active speech + {SILENCE_LIMIT_SECONDS}s silence) reached. Stopping.")
+                    break
+                elif not speaking and (time.time() - start_time) > record_seconds * 2: # Max wait for speech
+                    print(f"No speech detected for {record_seconds * 2} seconds. Stopping recording.")
+                    break
+
             except IOError as e:
                 if e.errno == pyaudio.paInputOverflowed:
                     print("⚠️  Uyarı: Ses girişi taştı, bazı veriler kaybolmuş olabilir.")
@@ -66,11 +109,13 @@ def record_audio(file_path: str = "temp_recording.wav", record_seconds: int = 5,
         
         print("🟢 Kayıt tamamlandı!")
         
-        # Stream'i kapat
         stream.stop_stream()
         stream.close()
         
-        # Ses dosyasını kaydet
+        if not frames:
+            print("❌ Ses algılanmadı, dosya kaydedilmedi.")
+            return None
+
         with wave.open(file_path, 'wb') as wf:
             wf.setnchannels(CHANNELS)
             wf.setsampwidth(audio.get_sample_size(FORMAT))
@@ -85,7 +130,6 @@ def record_audio(file_path: str = "temp_recording.wav", record_seconds: int = 5,
         return None
         
     finally:
-        # PyAudio'yu temizle
         audio.terminate()
 
 def get_audio_info(file_path: str) -> dict:

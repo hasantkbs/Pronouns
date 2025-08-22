@@ -1,12 +1,13 @@
-
-# -*- coding: utf-8 -*-
 import os
 import csv
-from utils import record_audio
+import sys # Added
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) # Added
+import config # Added
+from src.utils.utils import record_audio # Changed import path
 
 # --- Ayarlar ---
-CUMLELER_FILE = "cumleler.txt"
-OUTPUT_DIR = "users"
+CUMLELER_FILE = "cumleler.txt" # Keeping this for now, but note for future
+OUTPUT_DIR = config.BASE_PATH # Changed to use config.BASE_PATH
 
 def main():
     """Kullanıcıya özel ses verisi toplama script'i."""
@@ -29,7 +30,7 @@ def main():
         print("Geçerli bir kullanıcı adı girmelisiniz.")
         return
 
-    user_path = os.path.join(OUTPUT_DIR, user_name)
+    user_path = os.path.join(OUTPUT_DIR, user_name) # Uses OUTPUT_DIR (which is config.BASE_PATH)
     audio_path = os.path.join(user_path, "audio")
     os.makedirs(audio_path, exist_ok=True)
     print(f"Verileriniz '{user_path}' klasörüne kaydedilecek.")
@@ -59,7 +60,7 @@ def main():
             output_file_path = os.path.join(user_path, file_name)
             
             prompt = f"▶️  Yukarıdaki cümleyi okumak için ENTER'a basın..."
-            record_audio(file_path=output_file_path, record_seconds=5, prompt=prompt)
+            record_audio(file_path=output_file_path, record_seconds=config.KAYIT_SURESI_SN, prompt=prompt) # Uses config.KAYIT_SURESI_SN
 
             # Metadata'ya kaydet
             writer.writerow([file_name, sentence])

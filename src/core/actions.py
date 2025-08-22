@@ -67,8 +67,13 @@ def take_note(note_content: str = None):
     if not note_content:
         return "Ne not almamı istersiniz? Lütfen '... diye not al' şeklinde belirtin."
     
+    # Ensure the data/users directory exists
+    notes_dir = "data/users"
+    os.makedirs(notes_dir, exist_ok=True)
+    notes_file_path = os.path.join(notes_dir, "notes.txt")
+
     try:
-        with open("notes.txt", "a", encoding="utf-8") as f:
+        with open(notes_file_path, "a", encoding="utf-8") as f:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             f.write(f"{timestamp}: {note_content}\n")
         return f"'...{note_content[-20:]}' içeriğiyle not alındı."

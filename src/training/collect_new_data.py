@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 import os
-import sounddevice as sd
-import soundfile as sf
-import numpy as np
+# import sounddevice as sd # No longer needed
+# import soundfile as sf # No longer needed
+import numpy as np # Still needed for get_next_file_index if it uses numpy, but not for recording
 import time
 import glob
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import config
+from src.utils.utils import record_audio # Import the VAD-enabled record_audio
 
 def get_next_file_index(user_path, word):
     """
@@ -31,13 +34,7 @@ def get_next_file_index(user_path, word):
 
     return max_index + 1
 
-def record_audio(duration, sample_rate):
-    """Belirtilen süre boyunca ses kaydı yapar."""
-    print("Kayıt başladı...")
-    recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype='float32')
-    sd.wait()  # Kaydın bitmesini bekle
-    print("Kayıt tamamlandı.")
-    return recording.flatten()
+# Removed the local record_audio function
 
 def main():
     user_path = os.path.join(config.BASE_PATH, config.USER_ID)
@@ -71,14 +68,14 @@ def main():
             print(f"{i}...")
             time.sleep(1)
 
-        # Kaydı yap
-        recorded_audio = record_audio(config.KAYIT_SURESI_SN, config.ORNEKLEME_ORANI)
+        # Kaydı yap - now using the VAD-enabled record_audio from utils
+        # The record_audio function from utils already saves the file, so no need for sf.write here
+        recorded_file = record_audio(file_path=new_filepath, record_seconds=config.KAYIT_SURESI_SN)
 
-        # Kaydı dosyaya yaz
-        try:
-            sf.write(new_filepath, recorded_audio, config.ORNEKLEME_ORANI)
-            print(f"Başarılı: '{new_filepath}' dosyası kaydedildi.")
-        except Exception as e:
-            print(f"Hata: Dosya kaydedilirken bir sorun oluştu: {e}")
+        if recorded_file:
+            print(f"Başarılı: '{recorded_file}' dosyası kaydedildi.")
+        else:
+            print(f"Hata: Ses kaydı başarısız oldu veya ses algılanmadı.")
+
 if __name__ == "__main__":
     main()

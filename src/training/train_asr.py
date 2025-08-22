@@ -79,9 +79,14 @@ def prepare_example(batch, processor: Wav2Vec2Processor):
 
         target_sr = processor.feature_extractor.sampling_rate
         if sampling_rate != target_sr:
-            # Basit uyarı; kaliteli resampling için torchaudio/ librosa kullanılabilir.
-            print(f"[Uyarı] {file_path} için sr {sampling_rate} != {target_sr}. "
-                  f"Resample etmeden devam ediliyor.", file=sys.stderr)
+            # Resample audio to target_sr
+            resampler = torchaudio.transforms.Resample(
+                orig_freq=sampling_rate,
+                new_freq=target_sr
+            )
+            speech_array = resampler(torch.tensor(speech_array, dtype=torch.float)).numpy()
+            sampling_rate = target_sr # Update sampling_rate after resampling
+            print(f"[Bilgi] {file_path} için sr {sampling_rate} -> {target_sr} olarak resample edildi.", file=sys.stderr)
 
         batch["input_values"] = processor(
             speech_array, sampling_rate=sampling_rate
