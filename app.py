@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+from pathlib import Path
+
 sys.path.append(os.path.dirname(__file__)) # Add current directory to path for local imports
 sys.path.append(os.path.dirname(os.path.dirname(__file__))) # Add parent directory for src imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) # Add project root for config import
@@ -11,11 +13,28 @@ from src.utils.utils import record_audio
 from src.core.nlu import NLU_System # Added
 from src.core.actions import run_action # Added
 
+def get_user_id():
+    """Kullanıcıdan bir kimlik alır."""
+    return input("Lütfen kullanıcı kimliğinizi girin (örn: hasan): ").strip()
+
 def main():
     """Konuşma Bozukluğu Ses Tanıma Sistemi - Ana uygulama döngüsü."""
+    
+    # 0. Kullanıcı Kimliğini Al ve Kişiselleştirilmiş Modeli Kontrol Et
+    user_id = get_user_id()
+    personalized_model_path = Path("data/models/personalized_models") / user_id
+    model_to_load = None
+
+    if personalized_model_path.exists():
+        print(f"✅ {user_id} için kişiselleştirilmiş model bulundu!")
+        model_to_load = str(personalized_model_path)
+    else:
+        print("ℹ️  Kişiselleştirilmiş model bulunamadı. Varsayılan model kullanılacak.")
+        model_to_load = config.MODEL_NAME
+
     # 1. Sistemleri Başlat
     try:
-        asr_system = ASRSystem()
+        asr_system = ASRSystem(model_name=model_to_load)
         nlu_system = NLU_System() # Added
     except Exception as e:
         print(f"Sistem başlatılırken kritik bir hata oluştu: {e}")
@@ -24,6 +43,7 @@ def main():
     print("\n=========================================")
     print("   Konuşma Bozukluğu Ses Tanıma Sistemi   ")
     print("=========================================")
+    print(f"Hoş geldin, {user_id}!")
     print("Bu sistem konuşma bozukluğu olan bireylerin")
     print("seslerini tanıyıp metne dönüştürür.")
     print("Çıkmak için 'çık' veya 'exit' deyin.\n")

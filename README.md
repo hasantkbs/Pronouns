@@ -1,41 +1,92 @@
 # Speech Disorder Recognition System
 
-This project is a **simple and focused system** specially designed for **individuals with speech disorders** to recognize their speech and convert it to text. The system uses a `Wav2Vec2`-based ASR (Automatic Speech Recognition) model for speech-to-text conversion.
+This project is a **simple and focused system** specially designed for **individuals with speech disorders** to recognize their speech and convert it to text. The system uses a `Wav2Vec2`-based ASR (Automatic Speech Recognition) model and supports **personalization** to adapt to a specific user's voice.
+
+## 🚀 Workflow: From Zero to Personalized Recognition
+
+This guide explains how to collect personal voice data, train a personalized model, and use it in the main application.
+
+### Step 1: Collect Personal Data
+
+This script records your voice for a series of sentences and prepares the data for training.
+
+1.  **Navigate to the project directory** in your terminal.
+2.  **Run the data collection script.**
+
+    ```bash
+    python src/training/collect_user_data.py
+    ```
+3.  **Enter a User ID** when prompted (e.g., `user_001`, `hasan`, etc.). This ID will be used to save your data.
+4.  **Read the sentences** that appear on the screen. Press ENTER before each sentence to start recording.
+
+#### Using a Custom Sentence List
+
+By default, the script uses a predefined list of sentences. You can provide your own list in a `.txt` file (one sentence per line).
+
+```bash
+# Create a text file with your sentences
+# my_sentences.txt
+#   "First custom sentence."
+#   "Another sentence to record."
+
+# Run the script with the --file argument
+python src/training/collect_user_data.py --file my_sentences.txt
+```
+
+Your recorded audio and a `metadata.csv` file will be saved under `data/users/YOUR_USER_ID/`.
+
+### Step 2: Personalize the Model
+
+This script fine-tunes the base ASR model using your collected data.
+
+1.  **Run the personalization script** with the same User ID you used in Step 1.
+
+    ```bash
+    python personalize_model.py YOUR_USER_ID
+    ```
+    *(Replace `YOUR_USER_ID` with the actual ID, e.g., `python personalize_model.py hasan`)*
+
+2.  The script will load the base model, fine-tune it with your data, and save the new, personalized model to `data/models/personalized_models/YOUR_USER_ID/`.
+
+### Step 3: Run the Application
+
+Now you can use the main application, which will automatically load your personalized model.
+
+1.  **Start the application.**
+    ```bash
+    python app.py
+    ```
+2.  **Enter your User ID** when prompted.
+3.  The system will detect your personalized model and load it. If no personalized model is found for the ID, it will fall back to the default model.
+4.  Press **ENTER** to speak, and the system will transcribe your speech using the appropriate model.
+
+---
 
 ## 🎯 Project Purpose
 
 For individuals with speech disorders:
-- **Convert speech to text**
-- **Transform conversations into written form**
-- **Facilitate communication**
-- **Increase independence**
+- **Convert speech to text** with high accuracy through personalization.
+- **Facilitate communication** and **increase independence**.
 
-## 🏗️ System Architecture
+## ⚙️ Features
 
-The system has a simple and focused structure:
+- **Personalized Model Training:** Fine-tune the model for a specific user's voice for significantly improved accuracy.
+- **Flexible Data Collection:** Use a default list of sentences or provide your own via a text file.
+- **Dynamic Model Loading:** The app automatically detects and loads a user's personalized model if it exists.
+- **High-accuracy** base model (`Wav2Vec2`).
+- **Real-time** audio processing.
+- **Turkish** language support.
 
-1. **Audio Recording:** Records audio using microphone
-2. **Speech Recognition:** Converts speech to text using Wav2Vec2 model
-3. **Text Output:** Displays the recognized text on screen
+## 🔧 General Model Training (Optional)
 
-## 📁 Project Structure
+If you want to train the base model from scratch on a large dataset (like Mozilla Common Voice), you can use the `train_model.py` script.
 
+```bash
+# This requires a large, pre-processed dataset in the `downloaded_data` folder.
+# (GPU recommended)
+python train_model.py
 ```
-konusma_anlama_sistemi/
-├── src/                    # Source code
-│   ├── core/              # Core components
-│   │   └── asr.py         # Speech recognition system
-│   └── utils/             # Utility tools
-│       └── utils.py       # Audio recording functions
-├── data/                  # Data files
-│   └── models/           # Trained models
-├── downloaded_data/       # Training data (48K+ audio files)
-├── app.py                # Main application
-├── config.py             # Configuration
-├── train_model.py        # Model training
-├── analyze_data.py       # Dataset analysis
-└── requirements.txt      # Dependencies
-```
+After training, you can set this new model as the default in `config.py`.
 
 ## 🚀 Installation
 
@@ -52,159 +103,7 @@ pip install -r requirements.txt
 
 ### 2. Language Model Installation (Optional)
 
-For higher accuracy, you can install KenLM language model:
-
-```bash
-# Create language model directory
-mkdir -p data/models/language_model
-
-# Download KenLM model and place in data/models/language_model/ folder
-# Update KENLM_MODEL_PATH in config.py
-```
-
-## 🎮 Usage
-
-To start the system:
-
-```bash
-python app.py
-```
-
-### How it Works:
-
-1. **Press ENTER** - Audio recording starts
-2. **Speak** - You can speak for 5 seconds
-3. **See the result** - Recognized text appears on screen
-4. **To exit** - Say "çık" or "exit"
-
-### Example Usage:
-
-```
-=========================================
-   Speech Disorder Recognition System   
-=========================================
-This system recognizes speech from individuals
-with speech disorders and converts it to text.
-Say 'çık' or 'exit' to quit.
-
-------------------------------------------
-🎤 Press ENTER to speak and start recording...
-🔴 Recording started - You can speak now...
-🟢 Recording completed!
-💾 Audio file saved: temp_recording.wav
-
-🧠 Analyzing your speech...
-
-📝 Recognized Text:
-   'hello how are you'
-```
-
-## 🔧 Model Training
-
-### Dataset Analysis
-
-To analyze the existing dataset:
-
-```bash
-python analyze_data.py
-```
-
-**Available Dataset:**
-- 🎵 **48,365 audio files** (Turkish)
-- 📄 **6 metadata files** (Parquet format)
-- 📊 **Train:** 32,802 files
-- 📊 **Test:** 11,035 files
-- 📊 **Validation:** Available
-
-### Model Training
-
-To train your own model:
-
-```bash
-# Model training (GPU recommended)
-python train_model.py
-```
-
-**Training Parameters:**
-- **Epochs:** 3
-- **Batch Size:** 8
-- **Learning Rate:** 1e-4
-- **Model:** Wav2Vec2 Large 960h
-
-### Using Trained Model
-
-After training is complete:
-
-1. Update model path in `config.py`:
-   ```python
-   MODEL_NAME = "./trained_model"
-   ```
-
-2. Restart the system:
-   ```bash
-   python app.py
-   ```
-
-## 🧪 Testing
-
-To test the system:
-
-```bash
-# Dataset analysis
-python analyze_data.py
-
-# Audio recording test
-python src/utils/utils.py
-
-# ASR system test (if torch is installed)
-python src/core/asr.py
-```
-
-## ⚙️ Configuration
-
-You can change settings in `config.py`:
-
-```python
-# ASR Model Settings
-MODEL_NAME = "facebook/wav2vec2-large-960h"  # Change model
-SAMPLING_RATE = 16000  # Hz
-
-# Audio Recording Settings
-RECORDING_DURATION_SEC = 5  # Change recording duration
-```
-
-## 🎯 Features
-
-### ✅ Current Features:
-- **Simple and focused** interface
-- **High accuracy** speech recognition
-- **Turkish** language support
-- **Real-time** audio processing
-- **Easy to use** - just ENTER + speak
-- **Rich dataset** - 48K+ Turkish audio files
-- **Model training** - You can train your own model
-
-### 🔄 Future Features:
-- **Personalized** model training
-- **Voice response** system
-- **Web interface**
-- **Mobile application**
-
-## 📝 Development
-
-### Adding New Model:
-
-1. Change model name in `config.py`:
-   ```python
-   MODEL_NAME = "new/model/name"
-   ```
-
-2. The system will automatically use the new model.
-
-### Adding New Feature:
-
-1. Create new module in `src/core/`
-2. Integrate in `app.py`
+For higher accuracy, you can install the KenLM language model. Download the model and update the `KENLM_MODEL_PATH` in `config.py`.
 
 ## 🤝 Contributing
 
@@ -217,25 +116,3 @@ RECORDING_DURATION_SEC = 5  # Change recording duration
 ## 📄 License
 
 This project is licensed under the MIT License.
-
-## 🙏 Acknowledgments
-
-- Mozilla Common Voice project
-- Hugging Face Transformers library
-- Wav2Vec2 model developers
-
-## ⚠️ Important Notes
-
-### Dataset
-- This repository **does not contain audio files**
-- Training data must be provided separately
-- Personal audio data is not included for privacy reasons
-
-### Model Training
-- GPU usage is recommended
-- Sufficient disk space required for large datasets
-- Training time depends on dataset size
-
----
-
-**Note:** This project is developed to improve the quality of life for individuals with speech disorders.

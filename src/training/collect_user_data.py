@@ -1,74 +1,126 @@
-import os
-import csv
-import sys # Added
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) # Added
-import config # Added
-from src.utils.utils import record_audio # Changed import path
+# -*- coding: utf-8 -*-
+"""
+Konuşma Bozukluğu Ses Tanıma Sistemi - Kişisel Veri Toplama Aracı
 
-# --- Ayarlar ---
-CUMLELER_FILE = "cumleler.txt" # Keeping this for now, but note for future
-OUTPUT_DIR = config.BASE_PATH # Changed to use config.BASE_PATH
+Bu script, belirli bir kullanıcıdan kişiselleştirilmiş model eğitimi için 
+veri toplamak amacıyla kullanılır. Kullanıcıya bir dizi cümle okutur, 
+sesini kaydeder ve bir metadata dosyası oluşturur.
+
+Kullanım:
+- python collect_user_data.py
+- python collect_user_data.py --file /path/to/sentences.txt
+"""
+
+import os
+import sounddevice as sd
+import soundfile as sf
+import numpy as np
+import pandas as pd
+from pathlib import Path
+import argparse
+
+# --- Yapılandırma ---
+TARGET_SAMPLING_RATE = 16000
+BASE_DATA_PATH = "data/users"
+
+# Varsayılan cümleler (eğer dosya belirtilmezse kullanılır)
+DEFAULT_SENTENCES = [
+    "Merhaba, nasılsın?",
+    "Bugün hava çok güzel.",
+    "Yarın ne yapacaksın?",
+    "Bu sistemi test ediyorum.",
+    "Lütfen bana yardım et.",
+    "Ankara Türkiye'nin başkentidir.",
+    "Kitap okumayı çok severim.",
+    "Saat kaç?",
+    "Alışverişe gitmem gerekiyor.",
+    "İyi günler dilerim."
+]
+
+def get_sentences_from_file(file_path):
+    """Verilen txt dosyasından cümleleri okur."""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            sentences = [line.strip() for line in f if line.strip()]
+        print(f"✅ '{file_path}' dosyasından {len(sentences)} cümle başarıyla okundu.")
+        return sentences
+    except FileNotFoundError:
+        print(f"❌ Hata: '{file_path}' dosyası bulunamadı.")
+        return None
+    except Exception as e:
+        print(f"❌ Hata: Dosya okunurken bir sorun oluştu: {e}")
+        return None
+
+def get_user_id():
+    """Kullanıcıdan bir kimlik alır veya varsayılanı kullanır."""
+    user_id = input("Lütfen bir kullanıcı kimliği girin (örn: user_001): ").strip()
+    if not user_id:
+        user_id = "default_user"
+        print(f"Giriş yapılmadı, varsayılan kimlik kullanılıyor: {user_id}")
+    return user_id
+
+def record_audio(duration, samplerate):
+    """Belirtilen sürede ses kaydı yapar."""
+    print("Kayıt başladı...")
+    recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='float32')
+    sd.wait()  # Kaydın bitmesini bekle
+    print("Kayıt tamamlandı.")
+    return recording
 
 def main():
-    """Kullanıcıya özel ses verisi toplama script'i."""
-    print("--- Kullanıcı Sesi Veri Toplama Aracı ---")
+    """Ana veri toplama fonksiyonu."""
+    parser = argparse.ArgumentParser(description="Kullanıcı verisi toplama aracı.")
+    parser.add_argument("--file", type=str, help=".txt formatındaki cümleleri içeren dosyanın yolu.")
+    args = parser.parse_args()
 
-    # 1. Cümle dosyasını kontrol et
-    if not os.path.exists(CUMLELER_FILE):
-        print(f"HATA: '{CUMLELER_FILE}' dosyası bulunamadı.")
-        # Örnek bir dosya oluştur
-        with open(CUMLELER_FILE, "w", encoding="utf-8") as f:
-            f.write("bu birinci örnek cümledir\n")
-            f.write("bu da ikinci örnek cümledir\n")
-        print(f"Lütfen kayıt yapmak istediğiniz cümleleri bu dosyaya ekleyin.")
-        print(f"Örnek bir '{CUMLELER_FILE}' dosyası oluşturuldu. Lütfen içini doldurup script'i tekrar çalıştırın.")
-        return
+    if args.file:
+        sentences_to_read = get_sentences_from_file(args.file)
+        if sentences_to_read is None:
+            return # Dosya okuma hatası durumunda çık
+    else:
+        sentences_to_read = DEFAULT_SENTENCES
 
-    # 2. Kullanıcı bilgilerini al
-    user_name = input("Lütfen kullanıcı adınızı girin (örn: hasan): ").strip()
-    if not user_name:
-        print("Geçerli bir kullanıcı adı girmelisiniz.")
-        return
-
-    user_path = os.path.join(OUTPUT_DIR, user_name) # Uses OUTPUT_DIR (which is config.BASE_PATH)
-    audio_path = os.path.join(user_path, "audio")
-    os.makedirs(audio_path, exist_ok=True)
-    print(f"Verileriniz '{user_path}' klasörüne kaydedilecek.")
-
-    # 3. Cümleleri oku
-    with open(CUMLELER_FILE, "r", encoding="utf-8") as f:
-        sentences = [line.strip() for line in f if line.strip()]
+    user_id = get_user_id()
     
-    if not sentences:
-        print(f"'{CUMLELER_FILE}' dosyasında okunacak cümle bulunamadı.")
-        return
+    user_path = Path(BASE_DATA_PATH) / user_id
+    audio_path = user_path / "audio"
+    
+    audio_path.mkdir(parents=True, exist_ok=True)
+    
+    print(f"\nHoş geldiniz, {user_id}!")
+    print("Kişiselleştirilmiş model için veri toplama süreci başlıyor.")
+    print(f"Lütfen aşağıdaki {len(sentences_to_read)} cümleyi okuyun.")
+    print("Her cümleden sonra kayıt otomatik olarak başlayacak ve duracaktır.")
+    
+    metadata = []
 
-    # 4. Metadata dosyasını hazırla
-    metadata_path = os.path.join(user_path, "metadata.csv")
-    with open(metadata_path, "w", encoding="utf-8", newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(["file_name", "transcription"]) # Başlık satırı
-
-        print(f"\nToplam {len(sentences)} adet cümle kaydedilecek.")
+    for i, sentence in enumerate(sentences_to_read):
+        print("\n" + "="*50)
+        print(f"Cümle {i+1}/{len(sentences_to_read)}: '{sentence}'")
+        input("Hazır olduğunuzda ENTER tuşuna basın...")
         
-        # 5. Kayıt döngüsünü başlat
-        for i, sentence in enumerate(sentences):
-            print("\n------------------------------------------")
-            print(f"Cümle {i+1}/{len(sentences)}: '{sentence}'")
-            
-            file_name = f"audio/{i+1}.wav"
-            output_file_path = os.path.join(user_path, file_name)
-            
-            prompt = f"▶️  Yukarıdaki cümleyi okumak için ENTER'a basın..."
-            record_audio(file_path=output_file_path, record_seconds=config.KAYIT_SURESI_SN, prompt=prompt) # Uses config.KAYIT_SURESI_SN
+        recording = record_audio(duration=5, samplerate=TARGET_SAMPLING_RATE)
+        
+        file_name = f"{user_id}_sentence_{i+1}.wav"
+        file_path = audio_path / file_name
+        
+        sf.write(file_path, recording, TARGET_SAMPLING_RATE)
+        print(f"Ses dosyası kaydedildi: {file_path}")
+        
+        metadata.append({
+            "file_path": str(file_path.absolute()),
+            "transcription": sentence
+        })
 
-            # Metadata'ya kaydet
-            writer.writerow([file_name, sentence])
-
-    print("\n=========================================")
+    metadata_df = pd.DataFrame(metadata)
+    metadata_file_path = user_path / "metadata.csv"
+    metadata_df.to_csv(metadata_file_path, index=False, encoding='utf-8')
+    
+    print("\n" + "="*50)
     print("🎉 Veri toplama işlemi başarıyla tamamlandı!")
-    print(f"Tüm kayıtlarınız ve '{metadata_path}' dosyanız oluşturuldu.")
-    print("Artık bu veri setini kullanarak modeli yeniden eğitebilirsiniz.")
+    print(f"Toplam {len(metadata)} adet ses kaydı ve transkript oluşturuldu.")
+    print(f"Metadata dosyanız: {metadata_file_path}")
+    print("\nŞimdi bu verileri kullanarak modeli kişiselleştirebilirsiniz.")
 
 if __name__ == "__main__":
     main()
