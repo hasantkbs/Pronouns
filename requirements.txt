@@ -17,3 +17,4 @@ tqdm
 matplotlib
 seaborn
 https://github.com/kpu/kenlm/archive/master.zip
+sounddevice

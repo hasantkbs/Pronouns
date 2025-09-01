@@ -88,6 +88,26 @@ python train_model.py
 ```
 After training, you can set this new model as the default in `config.py`.
 
+## Geliştirme Yol Haritası Notları
+
+### Veri Toplama Stratejisi Üzerine
+
+Geniş bir veri seti (örneğin 5000 kelime) toplama sürecini hızlandırmak için "tek tek kelimeleri kaydedip bunları birleştirerek sentetik cümleler oluşturma" fikri değerlendirilmiştir.
+
+Bu yaklaşımın analizi sonucunda aşağıdaki karara varılmıştır:
+
+*   **Temel Sorun:** Bu yöntem, doğal konuşmanın en önemli unsurları olan **tonlama (prozodi)** ve **ses geçişlerini (koartikülasyon)** yok eder. Bu da modelin gerçekçi olmayan, robotik bir konuşma tarzını öğrenmesine ve gerçek dünya performansının düşmesine neden olabilir.
+
+*   **Karar:** Bu yöntem, ana eğitim stratejisi olarak **kullanılmamalıdır**.
+
+*   **Önerilen Hibrit Yaklaşım:**
+    1.  **Ana Veri Seti:** Eğitimin temelini oluşturmak için öncelik, **doğal ve akıcı okunmuş tam cümlelerin** kaydedilmesidir. Bu, modelin doğru tonlama ve ritmi öğrenmesini sağlar.
+    2.  **Veri Artırma (Augmentation):** Ana veri setinde az geçen veya hiç bulunmayan kritik kelimeler tek tek kaydedilebilir. Bu kelimelerden oluşturulan sentetik cümleler, toplam eğitim verisinin küçük bir bölümünü (örneğin %10-20) oluşturarak "veri artırma" amacıyla kullanılabilir.
+
+Bu hibrit model, hem modelin doğal konuşmayı öğrenmesini sağlar hem de kelime dağarcığının genişlemesine yardımcı olur.
+
+---
+
 ## 🚀 Installation
 
 ### 1. Create Conda Environment
