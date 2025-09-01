@@ -102,19 +102,22 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
             print("\n" + "="*50)
             print(f"{item_type.capitalize()} {i+1}/{len(items_to_record)} (Dosya No: {current_index}): '{item}'")
             
-            duration = 20 if item_type == "cümle" else 3
-            rec = record_audio(duration=duration, samplerate=TARGET_SAMPLING_RATE)
-            
-            file_name = f"{user_id}_{item_type}_{current_index}.wav"
-            file_path = save_path / file_name
-            
-            sf.write(file_path, rec, TARGET_SAMPLING_RATE)
-            print(f"✅ Ses dosyası kaydedildi: {file_path}")
-            
-            metadata.append({
-                "file_path": str(file_path.absolute()),
-                "transcription": item
-            })
+            for rep_num in range(1, 4): # Record 3 times
+                print(f"   ➡️ Tekrar {rep_num}/3: '{item}' için kayıt...")
+                duration = 20 if item_type == "cümle" else 3 # Still use 3 for words
+                rec = record_audio(duration=duration, samplerate=TARGET_SAMPLING_RATE)
+                
+                file_name = f"{user_id}_{item_type}_{current_index}_rep{rep_num}.wav"
+                file_path = save_path / file_name
+                
+                sf.write(file_path, rec, TARGET_SAMPLING_RATE)
+                print(f"   ✅ Ses dosyası kaydedildi: {file_path}")
+                
+                metadata.append({
+                    "file_path": str(file_path.absolute()),
+                    "transcription": item,
+                    "repetition": rep_num # Add repetition info
+                })
         
         print("\n" + "="*50)
         print(f"🎉 {item_type.capitalize()} toplama işlemi başarıyla tamamlandı!")
