@@ -96,39 +96,48 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
     if start_index > 0:
         print(f"Bilgi: Mevcut kayıtlar bulundu. Numaralandırma {start_index + 1}'den başlayacak.")
 
-
-    for i, item in enumerate(items_to_record):
-        current_index = start_index + i + 1
+    try:
+        for i, item in enumerate(items_to_record):
+            current_index = start_index + i + 1
+            print("\n" + "="*50)
+            print(f"{item_type.capitalize()} {i+1}/{len(items_to_record)} (Dosya No: {current_index}): '{item}'")
+            
+            duration = 20 if item_type == "cümle" else 3
+            rec = record_audio(duration=duration, samplerate=TARGET_SAMPLING_RATE)
+            
+            file_name = f"{user_id}_{item_type}_{current_index}.wav"
+            file_path = save_path / file_name
+            
+            sf.write(file_path, rec, TARGET_SAMPLING_RATE)
+            print(f"✅ Ses dosyası kaydedildi: {file_path}")
+            
+            metadata.append({
+                "file_path": str(file_path.absolute()),
+                "transcription": item
+            })
+        
         print("\n" + "="*50)
-        print(f"{item_type.capitalize()} {i+1}/{len(items_to_record)} (Dosya No: {current_index}): '{item}'")
-        
-        duration = 20 if item_type == "cümle" else 3
-        rec = record_audio(duration=duration, samplerate=TARGET_SAMPLING_RATE)
-        
-        file_name = f"{user_id}_{item_type}_{current_index}.wav"
-        file_path = save_path / file_name
-        
-        sf.write(file_path, rec, TARGET_SAMPLING_RATE)
-        print(f"✅ Ses dosyası kaydedildi: {file_path}")
-        
-        metadata.append({
-            "file_path": str(file_path.absolute()),
-            "transcription": item
-        })
+        print(f"🎉 {item_type.capitalize()} toplama işlemi başarıyla tamamlandı!")
 
-    # Mevcut metadata dosyasını oku ve yeni verileri ekle
-    if metadata_path.exists():
-        existing_df = pd.read_csv(metadata_path)
-        new_df = pd.DataFrame(metadata)
-        updated_df = pd.concat([existing_df, new_df], ignore_index=True)
-    else:
-        updated_df = pd.DataFrame(metadata)
-        
-    updated_df.to_csv(metadata_path, index=False, encoding='utf-8')
-    
-    print("\n" + "="*50)
-    print(f"🎉 {item_type.capitalize()} toplama işlemi başarıyla tamamlandı!")
-    print(f"Metadata dosyanız güncellendi: {metadata_path}")
+    finally:
+        if metadata:
+            print("\n🛑 Kayıt durduruluyor. Toplanan veriler CSV dosyasına yazılıyor...")
+            # Mevcut metadata dosyasını oku ve yeni verileri ekle
+            if metadata_path.exists():
+                try:
+                    existing_df = pd.read_csv(metadata_path)
+                    new_df = pd.DataFrame(metadata)
+                    updated_df = pd.concat([existing_df, new_df], ignore_index=True)
+                except pd.errors.EmptyDataError:
+                    updated_df = pd.DataFrame(metadata) # Eğer dosya boşsa
+            else:
+                updated_df = pd.DataFrame(metadata)
+                
+            updated_df.to_csv(metadata_path, index=False, encoding='utf-8')
+            
+            print(f"✅ Metadata dosyanız güncellendi: {metadata_path}")
+        else:
+            print("\n🛑 Kayıt durduruldu. Yazılacak yeni veri bulunmuyor.")
 
 def main():
     """Ana veri toplama menüsü."""
