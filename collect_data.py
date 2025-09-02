@@ -65,8 +65,6 @@ def get_user_id():
 
 def record_audio(duration, samplerate):
     """Belirtilen sürede ses kaydı yapar."""
-    print("Kayıt için hazırlanılıyor...")
-    input("Hazır olduğunuzda ENTER tuşuna basın ve konuşun...")
     print("▶️  Kayıt başladı...")
     recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='float32')
     sd.wait()  # Kaydın bitmesini bekle
@@ -77,6 +75,7 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
     """Cümle veya kelime kayıt oturumunu yürütür."""
     save_path.mkdir(parents=True, exist_ok=True)
     metadata = []
+    quit_session = False
 
     # Üzerine yazmayı önlemek için başlangıç indeksini belirle
     start_index = 0
@@ -104,6 +103,12 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
             
             for rep_num in range(1, 4): # Record 3 times
                 print(f"   ➡️ Tekrar {rep_num}/3: '{item}' için kayıt...")
+                
+                user_input = input("   Hazır olduğunuzda ENTER'a basın (çıkmak için 'q' yazıp ENTER'a basın): ")
+                if user_input.lower() == 'q':
+                    quit_session = True
+                    break
+
                 duration = 20 if item_type == "cümle" else 3 # Still use 3 for words
                 rec = record_audio(duration=duration, samplerate=TARGET_SAMPLING_RATE)
                 
@@ -118,9 +123,13 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
                     "transcription": item,
                     "repetition": rep_num # Add repetition info
                 })
+            
+            if quit_session:
+                break
         
-        print("\n" + "="*50)
-        print(f"🎉 {item_type.capitalize()} toplama işlemi başarıyla tamamlandı!")
+        if not quit_session:
+            print("\n" + "="*50)
+            print(f"🎉 {item_type.capitalize()} toplama işlemi başarıyla tamamlandı!")
 
     finally:
         if metadata:
