@@ -1,46 +1,5 @@
 # Konuşma Bozukluğu Ses Tanıma Sistemi - .gitignore
 
-# === Ses Dosyaları ve Büyük Veri Setleri ===
-# Bu dosyalar çok büyük olduğu için GitHub'a push edilmez
-downloaded_data/
-asr_data/
-asr_model/
-asr_model_finetuned/
-external_datasets/
-data/audio/
-data/models/
-data/users/
-
-# === Ses Dosya Formatları ===
-*.mp3
-*.wav
-*.flac
-*.m4a
-*.aac
-*.ogg
-
-# === Büyük Veri Dosyaları ===
-*.parquet
-*.tar
-*.zip
-*.gz
-*.bz2
-
-# === Model Dosyaları ===
-*.safetensors
-*.bin
-*.pt
-*.pth
-*.ckpt
-*.h5
-*.hdf5
-
-# === Geçici Dosyalar ===
-temp_recording.wav
-test_recording.wav
-*.tmp
-*.temp
-
 # === Python ===
 __pycache__/
 *.py[cod]
@@ -106,17 +65,3 @@ trained_model/
 checkpoints/
 runs/
 wandb/
-
-# === Test Dosyaları ===
-test_*.wav
-temp_*.wav
-
-# === Kullanıcı Verileri ve Dokümanlar ===
-# Kullanıcıya özel veriler ve dokümanlar gizlilik nedeniyle dahil edilmemiştir.
-data/users/**/*.json
-data/users/**/*.docx
-
-# === Özel Not ===
-# Bu proje konuşma bozukluğu olan bireyler için ses tanıma sistemi içerir.
-# Ses dosyaları ve büyük veri setleri gizlilik nedeniyle dahil edilmemiştir.
-# Model eğitimi için gerekli veriler ayrı olarak sağlanmalıdır.
