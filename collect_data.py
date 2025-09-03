@@ -77,32 +77,52 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
     metadata = []
     quit_session = False
 
+    # Mevcut kayıtları kontrol et
+    already_recorded = set()
+    if metadata_path.exists():
+        try:
+            existing_df = pd.read_csv(metadata_path)
+            if 'transcription' in existing_df.columns:
+                already_recorded = set(existing_df['transcription'].unique())
+                print(f"\nBilgi: Mevcut {len(already_recorded)} kayıtlı {item_type} bulundu.")
+        except (pd.errors.EmptyDataError, KeyError):
+            pass # Dosya boşsa veya sütun yoksa devam et
+
+    # Kaydedilecek yeni öğeleri filtrele
+    items_to_record_new = [item for item in items_to_record if item not in already_recorded]
+
+    if not items_to_record_new:
+        print(f"\n🎉 Tebrikler! Bu setteki tüm {item_type}ler zaten kaydedilmiş.")
+        return
+
     # Üzerine yazmayı önlemek için başlangıç indeksini belirle
     start_index = 0
     if save_path.exists():
         existing_indices = []
         for f in save_path.glob(f"{user_id}_{item_type}_*.wav"):
             try:
-                # Dosya adının sonundaki sayıyı al
-                index_str = f.stem.split('_')[-1]
+                # Dosya adından indeksi al (rep kısmını atla)
+                index_str = f.stem.split('_')[-2] 
+                if index_str.startswith(item_type): # Format kontrolü
+                    index_str = f.stem.split('_')[-1]
                 existing_indices.append(int(index_str))
             except (ValueError, IndexError):
                 continue # Formatla uyuşmayan dosyaları atla
         if existing_indices:
             start_index = max(existing_indices)
-    
-    print(f"\n{len(items_to_record)} adet {item_type} kaydedilecek.")
+
+    print(f"\n{len(items_to_record_new)} adet yeni {item_type} kaydedilecek.")
     if start_index > 0:
-        print(f"Bilgi: Mevcut kayıtlar bulundu. Numaralandırma {start_index + 1}'den başlayacak.")
+        print(f"Bilgi: Numaralandırma {start_index + 1}'den başlayacak.")
 
     try:
-        for i, item in enumerate(items_to_record):
+        for i, item in enumerate(items_to_record_new):
             current_index = start_index + i + 1
             print("\n" + "="*50)
-            print(f"{item_type.capitalize()} {i+1}/{len(items_to_record)} (Dosya No: {current_index}): '{item}'")
+            print(f"{item_type.capitalize()} {i+1}/{len(items_to_record_new)} (Dosya No: {current_index}): -> '{item}'")
             
             for rep_num in range(1, 4): # Record 3 times
-                print(f"   ➡️ Tekrar {rep_num}/3: '{item}' için kayıt...")
+                print(f"   -> Tekrar {rep_num}/3: '{item}' için kayıt...")
                 
                 user_input = input("   Hazır olduğunuzda ENTER'a basın (çıkmak için 'q' yazıp ENTER'a basın): ")
                 if user_input.lower() == 'q':
