@@ -71,8 +71,8 @@ def record_audio(duration, samplerate):
     print("⏹️  Kayıt tamamlandı.")
     return recording
 
-def run_recording_session(user_id, items_to_record, save_path, metadata_path, item_type):
-    """Cümle veya kelime kayıt oturumunu yürütür."""
+def run_recording_session(user_id, items_to_record, save_path, metadata_path, item_type, repetitions=3):
+    """Cümle, kelime veya harf kayıt oturumunu yürütür."""
     save_path.mkdir(parents=True, exist_ok=True)
     metadata = []
     quit_session = False
@@ -121,15 +121,20 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
             print("\n" + "="*50)
             print(f"{item_type.capitalize()} {i+1}/{len(items_to_record_new)} (Dosya No: {current_index}): -> '{item}'")
             
-            for rep_num in range(1, 4): # Record 3 times
-                print(f"   -> Tekrar {rep_num}/3: '{item}' için kayıt...")
+            for rep_num in range(1, repetitions + 1): # Record 'repetitions' times
+                print(f"   -> Tekrar {rep_num}/{repetitions}: '{item}' için kayıt...")
                 
                 user_input = input("   Hazır olduğunuzda ENTER'a basın (çıkmak için 'q' yazıp ENTER'a basın): ")
                 if user_input.lower() == 'q':
                     quit_session = True
                     break
 
-                duration = 20 if item_type == "cümle" else 3 # Still use 3 for words
+                if item_type == "cümle":
+                    duration = 20
+                elif item_type == "kelime":
+                    duration = 3
+                else: # Harf için
+                    duration = 2
                 rec = record_audio(duration=duration, samplerate=TARGET_SAMPLING_RATE)
                 
                 file_name = f"{user_id}_{item_type}_{current_index}_rep{rep_num}.wav"
@@ -181,18 +186,25 @@ def main():
     print("Ne tür bir kayıt yapmak istersiniz?")
     print("  1. Cümle Kaydı")
     print("  2. Kelime Kaydı")
+    print("  3. Harf Kaydı")
     
     choice = ""
-    while choice not in ["1", "2"]:
-        choice = input("Seçiminiz (1 veya 2): ")
+    while choice not in ["1", "2", "3"]:
+        choice = input("Seçiminiz (1, 2 veya 3): ")
 
     # 2. Dosya Seç
     if choice == '1':
         record_type = "cümle"
         sets_dir = "sentence_sets"
-    else:
+        repetitions = 3
+    elif choice == '2':
         record_type = "kelime"
         sets_dir = "words_set"
+        repetitions = 3
+    else:
+        record_type = "harf"
+        sets_dir = "data/letters_set"
+        repetitions = 5
 
     available_files = get_files_from_dir(sets_dir)
     if not available_files:
@@ -212,11 +224,14 @@ def main():
         if record_type == "cümle":
             save_path = user_path / "audio"
             metadata_path = user_path / "metadata.csv"
-        else:
+        elif record_type == "kelime":
             save_path = user_path / "words"
             metadata_path = user_path / "metadata_words.csv"
+        else: # Harf için
+            save_path = user_path / "letters"
+            metadata_path = user_path / "metadata_letters.csv"
             
-        run_recording_session(user_id, lines, save_path, metadata_path, record_type)
+        run_recording_session(user_id, lines, save_path, metadata_path, record_type, repetitions)
 
     except ValueError as e:
         print(f"❌ Hata: {e}")
