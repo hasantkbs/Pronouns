@@ -9,7 +9,7 @@ ORNEKLEME_ORANI = 16000  # Hz
 
 # --- Dil Modeli Ayarları (Opsiyonel) ---
 # Daha yüksek doğruluk için KenLM dil modeli kullanılabilir
-KENLM_MODEL_PATH = "data/models/language_model/lm.binary"
+KENLM_MODEL_PATH = "data/lm/lm.arpa"
 
 # --- Ses Kayıt Ayarları ---
 KAYIT_SURESI_SN = 5  # Varsayılan kayıt süresi (saniye)

@@ -19,6 +19,7 @@ from transformers (
 )
 from datasets import Dataset, Audio
 import config
+from adapters import AdapterConfig
 
 # train_model.py dosyasından DataCollatorCTCWithPadding sınıfını alıyoruz
 # Kod tekrarını önlemek için bu sınıf normalde paylaşılan bir modüle konulabilir.
@@ -55,6 +56,7 @@ class PersonalizedTrainer:
         self.base_model_path = base_model_path or config.MODEL_NAME
         self.user_data_path = Path(config.BASE_PATH) / self.user_id
         self.output_dir = Path("data/models/personalized_models") / self.user_id
+        self.adapter_name = "user_adapter"
         
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.processor = None
@@ -80,6 +82,8 @@ class PersonalizedTrainer:
         self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
         self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
         self.model.to(self.device)
+        self.model.add_adapter(self.adapter_name, config=AdapterConfig.load("pfeiffer", reduction_factor=16))
+        self.model.train_adapter(self.adapter_name)
         print(f"✅ Model yüklendi. Cihaz: {self.device}")
 
     def prepare_dataset(self):
@@ -152,8 +156,7 @@ class PersonalizedTrainer:
         trainer.train()
         
         print("✅ Model ince ayarı tamamlandı!")
-        trainer.save_model(str(self.output_dir))
-        self.processor.save_pretrained(str(self.output_dir))
+        self.model.save_adapter(str(self.output_dir), self.adapter_name)
         
         print(f"💾 Kişiselleştirilmiş model kaydedildi: {self.output_dir}")
         print("\nKullanım için app.py veya config.py dosyasını bu yeni model yolunu kullanacak şekilde güncelleyebilirsiniz.")
