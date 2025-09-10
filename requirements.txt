@@ -16,5 +16,6 @@ scikit-learn
 tqdm
 matplotlib
 seaborn
-https://github.com/kpu/kenlm/archive/master.zip
+kenlm
 sounddevice
+audiomentations

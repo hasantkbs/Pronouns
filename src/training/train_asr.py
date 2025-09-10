@@ -3,16 +3,19 @@
 
 import os
 import sys
+from src.utils.reporting import generate_report
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import config
 import argparse
 from typing import Dict, List, Union
+from functools import partial
 
 import numpy as np
 import pandas as pd
 import torch
 import soundfile as sf
 import evaluate
+import audiomentations as A
 
 from datasets import Dataset
 from inspect import signature
@@ -59,6 +62,14 @@ class DataCollatorCTCWithPadding:
         return batch
 # ---------------------------------------------------------
 
+def build_augment_pipeline(sampling_rate: int):
+    """Builds the audio augmentation pipeline."""
+    print(f"[Bilgi] Veri zenginleştirme (augmentation) pipeline'ı {sampling_rate}Hz için oluşturuluyor.", file=sys.stderr)
+    return A.Compose([
+        A.AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.01, p=0.4),
+        A.TimeStretch(min_rate=0.85, max_rate=1.15, p=0.4, leave_length_unchanged=False),
+        A.PitchShift(min_semitones=-3, max_semitones=3, p=0.4),
+    ], p=0.8) # Pipeline'ı %80 ihtimalle uygula
 
 def read_audio(file_path: str):
     """Load mono audio with soundfile."""
@@ -69,7 +80,7 @@ def read_audio(file_path: str):
     return speech_array, sampling_rate
 
 
-def prepare_example(batch, processor: Wav2Vec2Processor):
+def prepare_example(batch, processor: Wav2Vec2Processor, augmenter=None):
     """CSV satırını (file_path, transcript) -> (input_values, labels) çevirir."""
     try:
         file_path = batch["file_path"]
@@ -77,16 +88,21 @@ def prepare_example(batch, processor: Wav2Vec2Processor):
 
         speech_array, sampling_rate = read_audio(file_path)
 
+        # Augmentation uygula (eğer varsa)
+        if augmenter:
+            speech_array = augmenter(samples=speech_array, sample_rate=sampling_rate)
+
         target_sr = processor.feature_extractor.sampling_rate
         if sampling_rate != target_sr:
             # Resample audio to target_sr
+            import torchaudio
             resampler = torchaudio.transforms.Resample(
                 orig_freq=sampling_rate,
                 new_freq=target_sr
             )
             speech_array = resampler(torch.tensor(speech_array, dtype=torch.float)).numpy()
             sampling_rate = target_sr # Update sampling_rate after resampling
-            print(f"[Bilgi] {file_path} için sr {sampling_rate} -> {target_sr} olarak resample edildi.", file=sys.stderr)
+            # print(f"[Bilgi] {file_path} için sr {sampling_rate} -> {target_sr} olarak resample edildi.", file=sys.stderr)
 
         batch["input_values"] = processor(
             speech_array, sampling_rate=sampling_rate
@@ -107,7 +123,7 @@ def prepare_example(batch, processor: Wav2Vec2Processor):
         return batch
 
 
-def load_dataset_from_csv(csv_path: str, processor: Wav2Vec2Processor) -> Dataset:
+def load_dataset_from_csv(csv_path: str, processor: Wav2Vec2Processor, with_augmentation: bool = False) -> Dataset:
     """CSV -> HF Dataset (haritalama ve filtreleme dahil)"""
     df = pd.read_csv(csv_path)
     needed_cols = {"file_path", "transcript"}
@@ -117,9 +133,19 @@ def load_dataset_from_csv(csv_path: str, processor: Wav2Vec2Processor) -> Datase
                          f"Gerekli kolonlar: {needed_cols}")
 
     ds = Dataset.from_pandas(df, preserve_index=False)
-    ds = ds.map(lambda x: prepare_example(x, processor), num_proc=None)
+
+    augmenter = None
+    if with_augmentation:
+        sampling_rate = processor.feature_extractor.sampling_rate
+        augmenter = build_augment_pipeline(sampling_rate)
+
+    # partial ile processor ve augmenter'ı fonksiyona bağla
+    prepare_fn = partial(prepare_example, processor=processor, augmenter=augmenter)
+
+    ds = ds.map(prepare_fn, num_proc=None) # num_proc=None for debugging, can be increased
+    
     # Çok kısa kayıtları ve boşları at
-    ds = ds.filter(lambda x: isinstance(x["input_values"], (list, np.ndarray)) and len(x["input_values"]) > 0)
+    ds = ds.filter(lambda x: isinstance(x["input_values"], (list, np.ndarray)) and len(x["input_values"]) > 1000) # Min 1s audio
     return ds
 
 
@@ -197,7 +223,7 @@ def compute_metrics_builder(processor: Wav2Vec2Processor):
 
 def parse_args():
     ap = argparse.ArgumentParser(description="CTC tabanlı ASR eğitimi (Wav2Vec2)")
-    ap.add_argument("--model_id", type=str, default="facebook/wav2vec2-large-960h",
+    ap.add_argument("--model_id", type=str, default="jmaczan/wav2vec2-large-xls-r-300m-dysarthria",
                     help="Hugging Face model id (CTC tabanlı)")
     ap.add_argument("--train_csv", type=str, required=True,
                     help="Eğitim CSV yolu (file_path, transcript sütunları içermeli)")
@@ -215,6 +241,7 @@ def parse_args():
     ap.add_argument("--eval_steps", type=int, default=100)
     ap.add_argument("--logging_steps", type=int, default=50)
     ap.add_argument("--grad_accum", type=int, default=2)
+    ap.add_argument("--no_augment", action="store_true", help="Veri zenginleştirmeyi (augmentation) kapatır.")
     return ap.parse_args()
 
 
@@ -238,10 +265,10 @@ def main():
         model.freeze_feature_encoder()
 
     print("\n--- Dataset hazırlanıyor ---")
-    train_dataset = load_dataset_from_csv(args.train_csv, processor)
+    train_dataset = load_dataset_from_csv(args.train_csv, processor, with_augmentation=not args.no_augment)
     eval_dataset = None
     if args.eval_csv and os.path.exists(args.eval_csv):
-        eval_dataset = load_dataset_from_csv(args.eval_csv, processor)
+        eval_dataset = load_dataset_from_csv(args.eval_csv, processor, with_augmentation=False) # Eval setine augmentation uygulama
 
     print("\n--- TrainingArguments oluşturuluyor ---")
     ta_kwargs = build_training_args_kwargs(
@@ -282,6 +309,34 @@ def main():
     trainer.save_model(args.output_dir)
     processor.save_pretrained(args.output_dir)
     print(f"Model başarıyla '{args.output_dir}' klasörüne kaydedildi.")
+
+    # --- Raporlama ---
+    print("\n--- Rapor oluşturuluyor ---")
+
+    # En son metrikleri al
+    if eval_dataset is not None:
+        print("Değerlendirme metrikleri hesaplanıyor...")
+        eval_results = trainer.evaluate()
+        wer = eval_results.get("eval_wer", "Hesaplanamadı")
+
+        report_data = {
+            "title": f"ASR Model Eğitim Raporu: {os.path.basename(args.output_dir)}",
+            "metrics": {
+                "Model ID": args.model_id,
+                "Eğitim Veri Seti": args.train_csv,
+                "Değerlendirme Veri Seti": args.eval_csv,
+                "Epoch Sayısı": args.epochs,
+                "Batch Size (Train)": args.train_bs,
+                "Batch Size (Eval)": args.eval_bs,
+                "Öğrenme Oranı": args.lr,
+                "Veri Zenginleştirme": "Aktif" if not args.no_augment else "Pasif",
+                "Son Değerlendirme WER": wer,
+            },
+            "notes": f"Model '{args.output_dir}' klasörüne kaydedildi."
+        }
+        generate_report(report_data)
+    else:
+        print("Değerlendirme veri seti bulunmadığı için rapor oluşturulmuyor.")
 
 
 if __name__ == "__main__":

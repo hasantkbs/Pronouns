@@ -195,15 +195,15 @@ def main():
     # 2. Dosya Seç
     if choice == '1':
         record_type = "cümle"
-        sets_dir = "sentence_sets"
+        sets_dir = "datasets/sentence_sets"
         repetitions = 3
     elif choice == '2':
         record_type = "kelime"
-        sets_dir = "words_set"
+        sets_dir = "datasets/words_set"
         repetitions = 3
     else:
         record_type = "harf"
-        sets_dir = "data/letters_set"
+        sets_dir = "datasets/letters_set"
         repetitions = 5
 
     available_files = get_files_from_dir(sets_dir)

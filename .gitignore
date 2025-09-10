@@ -65,3 +65,9 @@ trained_model/
 checkpoints/
 runs/
 wandb/
+
+# === Data ===
+*.wav
+
+# === Proje Yönetimi ===
+gelistirme.txt
