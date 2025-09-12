@@ -14,7 +14,7 @@ This script records your voice for a series of sentences and prepares the data f
 2.  **Run the data collection script.**
 
     ```bash
-    python src/training/collect_user_data.py
+    python collect_data.py
     ```
 3.  **Enter a User ID** when prompted (e.g., `user_001`, `hasan`, etc.). This ID will be used to save your data.
 4.  **Read the sentences** that appear on the screen. Press ENTER before each sentence to start recording.
@@ -89,6 +89,10 @@ python train_model.py
 After training, you can set this new model as the default in `config.py`.
 
 ## Geliştirme Yol Haritası Notları
+
+### Model Güncellemesi
+
+Projenin temel ASR modeli, daha yüksek doğruluk sağlamak amacıyla `mpoyraz/wav2vec2-xls-r-300m-cv8-turkish` olarak güncellenmiştir. Bu model, Türkçe için daha büyük bir veri seti üzerinde eğitilmiştir ve daha iyi performans göstermesi beklenmektedir.
 
 ### Veri Toplama Stratejisi Üzerine
 

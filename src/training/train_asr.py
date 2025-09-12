@@ -69,6 +69,8 @@ def build_augment_pipeline(sampling_rate: int):
         A.AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.01, p=0.4),
         A.TimeStretch(min_rate=0.85, max_rate=1.15, p=0.4, leave_length_unchanged=False),
         A.PitchShift(min_semitones=-3, max_semitones=3, p=0.4),
+        A.TimeMask(min_band_part=0.05, max_band_part=0.2, p=0.4),
+        A.BandStopFilter(p=0.4),
     ], p=0.8) # Pipeline'ı %80 ihtimalle uygula
 
 def read_audio(file_path: str):
@@ -123,9 +125,13 @@ def prepare_example(batch, processor: Wav2Vec2Processor, augmenter=None):
         return batch
 
 
-def load_dataset_from_csv(csv_path: str, processor: Wav2Vec2Processor, with_augmentation: bool = False) -> Dataset:
+def load_dataset_from_csv(csv_path: str, processor: Wav2Vec2Processor, with_augmentation: bool = False, is_hard_cases: bool = False) -> Dataset:
     """CSV -> HF Dataset (haritalama ve filtreleme dahil)"""
     df = pd.read_csv(csv_path)
+    
+    if is_hard_cases:
+        df = df.rename(columns={"ground_truth": "transcript"})
+
     needed_cols = {"file_path", "transcript"}
     missing = needed_cols - set(df.columns)
     if missing:
@@ -223,7 +229,7 @@ def compute_metrics_builder(processor: Wav2Vec2Processor):
 
 def parse_args():
     ap = argparse.ArgumentParser(description="CTC tabanlı ASR eğitimi (Wav2Vec2)")
-    ap.add_argument("--model_id", type=str, default="jmaczan/wav2vec2-large-xls-r-300m-dysarthria",
+    ap.add_argument("--model_id", type=str, default="mpoyraz/wav2vec2-xls-r-300m-cv8-turkish",
                     help="Hugging Face model id (CTC tabanlı)")
     ap.add_argument("--train_csv", type=str, required=True,
                     help="Eğitim CSV yolu (file_path, transcript sütunları içermeli)")
@@ -242,6 +248,8 @@ def parse_args():
     ap.add_argument("--logging_steps", type=int, default=50)
     ap.add_argument("--grad_accum", type=int, default=2)
     ap.add_argument("--no_augment", action="store_true", help="Veri zenginleştirmeyi (augmentation) kapatır.")
+    ap.add_argument("--log_hard_cases", action="store_true", help="Hatalı tahminleri bir CSV dosyasına kaydeder.")
+    ap.add_argument("--train_on_hard_cases", action="store_true", help="Sadece hatalı tahminler üzerinde eğitim yapar.")
     return ap.parse_args()
 
 
@@ -265,7 +273,15 @@ def main():
         model.freeze_feature_encoder()
 
     print("\n--- Dataset hazırlanıyor ---")
-    train_dataset = load_dataset_from_csv(args.train_csv, processor, with_augmentation=not args.no_augment)
+    if args.train_on_hard_cases:
+        print("[Bilgi] Hatalı tahminler üzerinden eğitim yapılacak.")
+        train_csv_path = os.path.join("data", "hard_cases.csv")
+        if not os.path.exists(train_csv_path):
+            raise FileNotFoundError(f"'{train_csv_path}' bulunamadı. Lütfen önce --log_hard_cases ile bir eğitim çalıştırın.")
+        train_dataset = load_dataset_from_csv(train_csv_path, processor, with_augmentation=not args.no_augment, is_hard_cases=True)
+    else:
+        train_dataset = load_dataset_from_csv(args.train_csv, processor, with_augmentation=not args.no_augment)
+
     eval_dataset = None
     if args.eval_csv and os.path.exists(args.eval_csv):
         eval_dataset = load_dataset_from_csv(args.eval_csv, processor, with_augmentation=False) # Eval setine augmentation uygulama
@@ -310,6 +326,30 @@ def main():
     processor.save_pretrained(args.output_dir)
     print(f"Model başarıyla '{args.output_dir}' klasörüne kaydedildi.")
 
+    # --- Hatalı Tahminleri Loglama ---
+    if args.log_hard_cases and eval_dataset is not None:
+        print("\n--- Hatalı Tahminler Loglanıyor ---")
+        predictions = trainer.predict(eval_dataset)
+        pred_ids = np.argmax(predictions.predictions, axis=-1)
+        pred_str = processor.batch_decode(pred_ids, skip_special_tokens=True)
+
+        hard_cases = []
+        for i in range(len(pred_str)):
+            # Normalize strings for comparison
+            if pred_str[i].strip().lower() != eval_dataset[i]['transcript'].strip().lower():
+                hard_cases.append({
+                    "file_path": eval_dataset[i]['file_path'],
+                    "ground_truth": eval_dataset[i]['transcript'],
+                    "prediction": pred_str[i]
+                })
+
+        if hard_cases:
+            hard_cases_df = pd.DataFrame(hard_cases)
+            hard_cases_csv_path = os.path.join("data", "hard_cases.csv")
+            hard_cases_df.to_csv(hard_cases_csv_path, index=False, encoding="utf-8")
+            print(f"{len(hard_cases)} hatalı tahmin '{hard_cases_csv_path}' dosyasına kaydedildi.")
+
+
     # --- Raporlama ---
     print("\n--- Rapor oluşturuluyor ---")
 
@@ -337,6 +377,7 @@ def main():
         generate_report(report_data)
     else:
         print("Değerlendirme veri seti bulunmadığı için rapor oluşturulmuyor.")
+
 
 
 if __name__ == "__main__":
