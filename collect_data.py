@@ -8,6 +8,7 @@ birini seçtirir ve kayıt işlemini başlatır.
 
 Kullanım:
 - python collect_data.py
+- python collect_data.py --re-record
 """
 
 import os
@@ -16,6 +17,7 @@ import soundfile as sf
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import argparse
 
 # --- Yapılandırma ---
 TARGET_SAMPLING_RATE = 16000
@@ -71,7 +73,7 @@ def record_audio(duration, samplerate):
     print("⏹️  Kayıt tamamlandı.")
     return recording
 
-def run_recording_session(user_id, items_to_record, save_path, metadata_path, item_type, repetitions=3):
+def run_recording_session(user_id, items_to_record, save_path, metadata_path, item_type, repetitions=3, re_record=False):
     """Cümle, kelime veya harf kayıt oturumunu yürütür."""
     save_path.mkdir(parents=True, exist_ok=True)
     metadata = []
@@ -79,7 +81,7 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
 
     # Mevcut kayıtları CSV'den kontrol et
     already_recorded = set()
-    if metadata_path.exists():
+    if metadata_path.exists() and not re_record:
         try:
             existing_df = pd.read_csv(metadata_path)
             if 'transcription' in existing_df.columns:
@@ -91,7 +93,10 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
             pass # Dosya boşsa veya sütun yoksa devam et
 
     # Kaydedilecek yeni öğeleri filtrele (daha önce kaydedilmemiş olanlar)
-    items_to_record_new = [item for item in items_to_record if item not in already_recorded]
+    if not re_record:
+        items_to_record_new = [item for item in items_to_record if item not in already_recorded]
+    else:
+        items_to_record_new = items_to_record
 
     if not items_to_record_new:
         print(f"\n🎉 Tebrikler! Bu setteki tüm {item_type}ler zaten kaydedilmiş.")
@@ -112,12 +117,12 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
             # Dosya adlandırması için orijinal indeksi bul (tutarlılık için)
             original_index = original_indices.get(item)
             
-            if original_index is None:
+            if original_index is None and not re_record:
                 print(f"⚠️ Uyarı: '{item}' kelimesi orijinal listede bulunamadı. Atlanıyor.")
                 continue
 
             # Dosya adı için numara (orijinal sıraya göre)
-            file_number = original_index + 1
+            file_number = original_index + 1 if original_index is not None else i + 1
             
             # Ekranda gösterilecek Genel No (toplam kayıt sayısı)
             genel_no = num_already_recorded + i + 1
@@ -169,7 +174,7 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
         if metadata:
             print("\n🛑 Kayıt durduruluyor. Toplanan veriler CSV dosyasına yazılıyor...")
             # Mevcut metadata dosyasını oku ve yeni verileri ekle
-            if metadata_path.exists() and metadata_path.stat().st_size > 0:
+            if metadata_path.exists() and metadata_path.stat().st_size > 0 and not re_record:
                 try:
                     existing_df = pd.read_csv(metadata_path)
                     new_df = pd.DataFrame(metadata)
@@ -182,7 +187,8 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
                 updated_df = pd.DataFrame(metadata)
                 
             # Yinelenen satırları temizle (güvenlik önlemi)
-            updated_df.drop_duplicates(subset=['file_path', 'transcription', 'repetition'], inplace=True)
+            if not re_record:
+                updated_df.drop_duplicates(subset=['file_path', 'transcription', 'repetition'], inplace=True)
             
             updated_df.to_csv(metadata_path, index=False, encoding='utf-8')
             
@@ -191,9 +197,47 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
             print("\n🛑 Kayıt durduruldu. Yazılacak yeni veri bulunmuyor.")
 
 
-
 def main():
     """Ana veri toplama menüsü."""
+    parser = argparse.ArgumentParser(description="Birleşik Veri Toplama Aracı")
+    parser.add_argument("--re-record", action="store_true", help="datasets/tekrar_kayit.txt dosyasındaki verileri yeniden kaydeder.")
+    args = parser.parse_args()
+
+    if args.re_record:
+        print("=======================================")
+        print("     Yeniden Kayıt Modu Başlatıldı     ")
+        print("=======================================")
+        try:
+            user_id = get_user_id()
+            rerecord_file_path = Path("datasets/tekrar_kayit.txt")
+            lines = get_lines_from_file(rerecord_file_path)
+            if not lines:
+                print("Yeniden kaydedilecek veri bulunamadı.")
+                return
+
+            # Determine record type (word or letter)
+            # This is a simple heuristic, assuming single characters are letters
+            if all(len(line) == 1 for line in lines):
+                record_type = "harf"
+                repetitions = 5
+                save_path = Path(BASE_DATA_PATH) / user_id / "letters"
+                metadata_path = Path(BASE_DATA_PATH) / user_id / "metadata_letters.csv"
+            else:
+                record_type = "kelime"
+                repetitions = 3
+                save_path = Path(BASE_DATA_PATH) / user_id / "words"
+                metadata_path = Path(BASE_DATA_PATH) / user_id / "metadata_words.csv"
+
+            run_recording_session(user_id, lines, save_path, metadata_path, record_type, repetitions, re_record=True)
+
+        except ValueError as e:
+            print(f"❌ Hata: {e}")
+            return
+        except Exception as e:
+            print(f"Beklenmedik bir hata oluştu: {e}")
+            return
+        return
+
     print("=======================================")
     print("  Birleşik Veri Toplama Aracına Hoş Geldiniz ")
     print("=======================================")
