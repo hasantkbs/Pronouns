@@ -11,7 +11,7 @@ import argparse
 import torch
 import pandas as pd
 from pathlib import Path
-from transformers (
+from transformers import (
     Wav2Vec2ForCTC,
     Wav2Vec2Processor,
     TrainingArguments,
@@ -82,7 +82,7 @@ class PersonalizedTrainer:
         self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
         self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
         self.model.to(self.device)
-        self.model.add_adapter(self.adapter_name, config=AdapterConfig.load("pfeiffer", reduction_factor=16))
+        self.model.add_adapter(self.adapter_name, config=AdapterConfig.load("pfeiffer", reduction_factor=config.ADAPTER_REDUCTION_FACTOR))
         self.model.train_adapter(self.adapter_name)
         print(f"✅ Model yüklendi. Cihaz: {self.device}")
 
@@ -126,17 +126,17 @@ class PersonalizedTrainer:
             batch_size=2 # Küçük veri setleri için batch_size'ı düşür
         )
         
-        # İnce ayar için eğitim parametreleri
-        # Daha az epoch, daha düşük öğrenme oranı
+        # İnce ayar için eğitim parametreleri config.py dosyasından okunur
         training_args = TrainingArguments(
             output_dir=str(self.output_dir),
-            per_device_train_batch_size=2,
-            num_train_epochs=10, # Kişisel veri az olduğu için epoch sayısı artırılabilir
-            learning_rate=5e-5,
+            per_device_train_batch_size=config.FINETUNE_BATCH_SIZE,
+            num_train_epochs=config.NUM_FINETUNE_EPOCHS,
+            learning_rate=config.FINETUNE_LEARNING_RATE,
             fp16=torch.cuda.is_available(),
             save_total_limit=1,
-            logging_steps=1,
-            evaluation_strategy="no", # Değerlendirme veri seti yok
+            logging_steps=config.FINETUNE_LOGGING_STEPS,
+            eval_steps=config.FINETUNE_EVAL_STEPS,
+            evaluation_strategy="no",  # Değerlendirme için ayrı bir set yok
             save_strategy="epoch"
         )
         
