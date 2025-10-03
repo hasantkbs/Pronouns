@@ -8,6 +8,7 @@ ASR modelini o kullanıcı için ince ayar (fine-tuning) yapar.
 
 import os
 os.environ["TRANSFORMERS_DISABLE_PEFT"] = "1"
+import adapters.init
 import argparse
 import torch
 import pandas as pd
