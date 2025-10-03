@@ -8,7 +8,7 @@ ASR modelini o kullanıcı için ince ayar (fine-tuning) yapar.
 
 import os
 os.environ["TRANSFORMERS_DISABLE_PEFT"] = "1"
-import adapters.init
+
 import argparse
 import torch
 import pandas as pd
@@ -23,6 +23,7 @@ from datasets import Dataset, Audio
 import config
 from adapters import AdapterConfig
 import adapters.composition
+import adapters.models
 
 # train_model.py dosyasından DataCollatorCTCWithPadding sınıfını alıyoruz
 # Kod tekrarını önlemek için bu sınıf normalde paylaşılan bir modüle konulabilir.
