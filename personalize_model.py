@@ -82,7 +82,7 @@ class PersonalizedTrainer:
         self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
         self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
         self.model.to(self.device)
-        self.model.add_adapter(self.adapter_name, config=AdapterConfig.load("pfeiffer", reduction_factor=config.ADAPTER_REDUCTION_FACTOR))
+        self.model.add_adapter(self.adapter_name, AdapterConfig.load("pfeiffer", reduction_factor=config.ADAPTER_REDUCTION_FACTOR))
         self.model.train_adapter(self.adapter_name)
         print(f"✅ Model yüklendi. Cihaz: {self.device}")
 
