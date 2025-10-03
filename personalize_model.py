@@ -89,7 +89,7 @@ class PersonalizedTrainer:
     def prepare_dataset(self):
         """Kullanıcıya özel veri setini hazırlar."""
         print(f"📊 Veri seti hazırlanıyor: {self.user_data_path}")
-        metadata_path = self.user_data_path / "metadata.csv"
+        metadata_path = self.user_data_path / "metadata_words.csv"
         df = pd.read_csv(metadata_path)
         
         dataset = Dataset.from_pandas(df)
