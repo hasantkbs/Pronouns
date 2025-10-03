@@ -102,7 +102,10 @@ class PersonalizedTrainer:
         df = pd.read_csv(metadata_path)
         
         dataset = Dataset.from_pandas(df)
+        print(f"DEBUG: Dataset columns before cast_column: {dataset.column_names}")
         dataset = dataset.cast_column("file_path", Audio(sampling_rate=config.ORNEKLEME_ORANI))
+        print(f"DEBUG: Dataset columns after cast_column: {dataset.column_names}")
+        print(f"DEBUG: First element of dataset after cast_column: {dataset[0]}")
         
         print(f"📈 Veri seti boyutu: {len(dataset)} kayıt")
         return dataset
