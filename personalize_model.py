@@ -7,7 +7,6 @@ ASR modelini o kullanıcı için ince ayar (fine-tuning) yapar.
 """
 
 import os
-os.environ["TRANSFORMERS_DISABLE_PEFT"] = "1"
 
 import argparse
 import torch
@@ -22,8 +21,6 @@ from transformers import (
 from datasets import Dataset, Audio
 import config
 from adapters import AdapterConfig
-import adapters.composition
-from adapters.models.wav2vec2 import Wav2Vec2AdapterModel
 
 # train_model.py dosyasından DataCollatorCTCWithPadding sınıfını alıyoruz
 # Kod tekrarını önlemek için bu sınıf normalde paylaşılan bir modüle konulabilir.
@@ -84,7 +81,7 @@ class PersonalizedTrainer:
         """Temel model ve işlemciyi yükler."""
         print(f"📥 Temel model yükleniyor: {self.base_model_path}")
         self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
-        self.model = Wav2Vec2AdapterModel.from_pretrained(self.base_model_path)
+        self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
         self.model.to(self.device)
         self.model.add_adapter(self.adapter_name, AdapterConfig.load("pfeiffer", reduction_factor=config.ADAPTER_REDUCTION_FACTOR))
         self.model.train_adapter(self.adapter_name)
