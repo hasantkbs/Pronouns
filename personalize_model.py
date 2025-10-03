@@ -21,7 +21,6 @@ from transformers import (
 from datasets import Dataset, Audio
 from peft import LoraConfig, get_peft_model
 import config
-import torchcodec
 
 
 # train_model.py dosyasından DataCollatorCTCWithPadding sınıfını alıyoruz
