@@ -80,7 +80,7 @@ class PersonalizedTrainer:
         """Temel model ve işlemciyi yükler."""
         print(f"📥 Temel model yükleniyor: {self.base_model_path}")
         self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
-        self.model = AutoAdapterModel.from_pretrained(self.base_model_path)
+        self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
         self.model.to(self.device)
         self.model.add_adapter(self.adapter_name, AdapterConfig.load("pfeiffer", reduction_factor=config.ADAPTER_REDUCTION_FACTOR))
         self.model.train_adapter(self.adapter_name)
