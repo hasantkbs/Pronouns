@@ -19,7 +19,7 @@ from transformers import (
 )
 from datasets import Dataset, Audio
 import config
-from adapters import AdapterConfig, AutoAdapterModel
+from adapters import AdapterConfig, AdapterModel
 
 # train_model.py dosyasından DataCollatorCTCWithPadding sınıfını alıyoruz
 # Kod tekrarını önlemek için bu sınıf normalde paylaşılan bir modüle konulabilir.
@@ -80,8 +80,8 @@ class PersonalizedTrainer:
         """Temel model ve işlemciyi yükler."""
         print(f"📥 Temel model yükleniyor: {self.base_model_path}")
         self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
-        self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
-        self.model.to(self.device)
+                    base_model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
+                    self.model = AdapterModel(base_model)        self.model.to(self.device)
         self.model.add_adapter(self.adapter_name, AdapterConfig.load("pfeiffer", reduction_factor=config.ADAPTER_REDUCTION_FACTOR))
         self.model.train_adapter(self.adapter_name)
         print(f"✅ Model yüklendi. Cihaz: {self.device}")
