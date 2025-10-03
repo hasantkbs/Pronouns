@@ -19,8 +19,9 @@ from transformers import (
     Trainer
 )
 from datasets import Dataset, Audio
+from peft import LoraConfig, get_peft_model
 import config
-from adapters import AdapterConfig
+
 
 # train_model.py dosyasından DataCollatorCTCWithPadding sınıfını alıyoruz
 # Kod tekrarını önlemek için bu sınıf normalde paylaşılan bir modüle konulabilir.
@@ -83,8 +84,15 @@ class PersonalizedTrainer:
         self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
         self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
         self.model.to(self.device)
-        self.model.add_adapter(self.adapter_name, AdapterConfig.load("pfeiffer", reduction_factor=config.ADAPTER_REDUCTION_FACTOR))
-        self.model.train_adapter(self.adapter_name)
+        peft_config = LoraConfig(
+            r=config.ADAPTER_REDUCTION_FACTOR,
+            lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2, # A common heuristic
+            target_modules=["q_proj", "v_proj"], # Common target modules for Wav2Vec2
+            lora_dropout=0.1, # Example dropout
+            bias="none",
+            task_type="CAUSAL_LM" # Changed to CAUSAL_LM
+        )
+        self.model = get_peft_model(self.model, peft_config)
         print(f"✅ Model yüklendi. Cihaz: {self.device}")
 
     def prepare_dataset(self):
