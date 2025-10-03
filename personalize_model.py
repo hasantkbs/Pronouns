@@ -67,7 +67,7 @@ class PersonalizedTrainer:
         print(f"🎯 {self.user_id} için kişiselleştirme süreci başlıyor.")
         print("="*50)
         
-        if not self.user_data_path.exists() or not (self.user_data_path / "metadata.csv").exists():
+        if not self.user_data_path.exists() or not (self.user_data_path / "metadata_words.csv").exists():
             print(f"❌ Hata: {self.user_id} için veri bulunamadı.")
             print(f"Lütfen önce 'src/training/collect_user_data.py' scriptini çalıştırın.")
             return
