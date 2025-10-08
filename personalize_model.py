@@ -18,37 +18,17 @@ from transformers import (
     TrainingArguments,
     Trainer
 )
-from datasets import Dataset, Audio
+from src.training.custom_collator import CustomDataCollatorForCTC
 from peft import LoraConfig, get_peft_model
+from torch.utils.data import DataLoader
+from torch.optim import AdamW
+from accelerate import Accelerator
+from tqdm import tqdm
 import config
+import librosa
+import soundfile as sf
+from datasets import Dataset, Audio
 
-
-# train_model.py dosyasından DataCollatorCTCWithPadding sınıfını alıyoruz
-# Kod tekrarını önlemek için bu sınıf normalde paylaşılan bir modüle konulabilir.
-class DataCollatorCTCWithPadding:
-    def __init__(self, processor, padding=True):
-        self.processor = processor
-        self.padding = padding
-
-    def __call__(self, features):
-        input_features = [{"input_values": feature["input_values"]} for feature in features]
-        batch = self.processor.pad(
-            input_features,
-            padding=self.padding,
-            return_tensors="pt",
-        )
-
-        label_features = [{"input_ids": feature["labels"]} for feature in features]
-        labels_batch = self.processor.pad(
-            label_features,
-            padding=self.padding,
-            return_tensors="pt",
-        )
-
-        labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
-        batch["labels"] = labels
-
-        return batch
 
 class PersonalizedTrainer:
     """Kullanıcıya özel model eğitici."""
@@ -90,7 +70,6 @@ class PersonalizedTrainer:
             target_modules=["q_proj", "v_proj"], # Common target modules for Wav2Vec2
             lora_dropout=0.1, # Example dropout
             bias="none",
-            task_type="CAUSAL_LM" # Changed to CAUSAL_LM
         )
         self.model = get_peft_model(self.model, peft_config)
         print(f"✅ Model yüklendi. Cihaz: {self.device}")
@@ -100,19 +79,22 @@ class PersonalizedTrainer:
         print(f"📊 Veri seti hazırlanıyor: {self.user_data_path}")
         metadata_path = self.user_data_path / "metadata_words.csv"
         df = pd.read_csv(metadata_path)
+
+        def audio_loader(path):
+            filename = os.path.basename(path)
+            filepath = self.user_data_path / "words" / filename
+            speech, sample_rate = librosa.load(filepath, sr=config.ORNEKLEME_ORANI)
+            return speech
+
+        df["audio"] = df["file_path"].apply(audio_loader)
         
         dataset = Dataset.from_pandas(df)
-        print(f"DEBUG: Dataset columns before cast_column: {dataset.column_names}")
-        dataset = dataset.cast_column("file_path", Audio(sampling_rate=config.ORNEKLEME_ORANI))
-        print(f"DEBUG: Dataset columns after cast_column: {dataset.column_names}")
-        print(f"DEBUG: First element of dataset after cast_column: {dataset[0]}")
-        
         print(f"📈 Veri seti boyutu: {len(dataset)} kayıt")
         return dataset
 
     def preprocess_function(self, examples):
         """Veri ön işleme fonksiyonu."""
-        audio_arrays = [x["array"] for x in examples["audio"]]
+        audio_arrays = examples["audio"]
         inputs = self.processor(
             audio_arrays, 
             sampling_rate=config.ORNEKLEME_ORANI, 
@@ -123,53 +105,72 @@ class PersonalizedTrainer:
         with self.processor.as_target_processor():
             labels = self.processor(examples["transcription"]).input_ids
             
-        examples["input_values"] = inputs.input_values[0]
+        examples["input_values"] = inputs.input_values
         examples["labels"] = labels
         return examples
 
     def train_model(self, dataset):
-        """Modeli ince ayar (fine-tuning) ile eğitir."""
-        print("🚀 Kişiselleştirilmiş model eğitimi başlıyor...")
-        
+        """Modeli, transformers.Trainer kullanmadan manuel bir PyTorch döngüsü ile eğitir."""
+        print("🚀 Kişiselleştirilmiş model eğitimi başlıyor... (Manuel Döngü)")
+
+        # 1. Veri Setini Hazırla
         processed_dataset = dataset.map(
             self.preprocess_function,
             remove_columns=dataset.column_names,
             batched=True,
-            batch_size=2 # Küçük veri setleri için batch_size'ı düşür
+            batch_size=config.FINETUNE_BATCH_SIZE
         )
-        
-        # İnce ayar için eğitim parametreleri config.py dosyasından okunur
-        training_args = TrainingArguments(
-            output_dir=str(self.output_dir),
-            per_device_train_batch_size=config.FINETUNE_BATCH_SIZE,
-            num_train_epochs=config.NUM_FINETUNE_EPOCHS,
-            learning_rate=config.FINETUNE_LEARNING_RATE,
-            fp16=torch.cuda.is_available(),
-            save_total_limit=1,
-            logging_steps=config.FINETUNE_LOGGING_STEPS,
-            eval_steps=config.FINETUNE_EVAL_STEPS,
-            evaluation_strategy="no",  # Değerlendirme için ayrı bir set yok
-            save_strategy="epoch"
-        )
-        
-        data_collator = DataCollatorCTCWithPadding(
-            processor=self.processor, 
+
+        data_collator = CustomDataCollatorForCTC(
+            processor=self.processor,
             padding=True
         )
+
+        dataloader = DataLoader(
+            processed_dataset,
+            batch_size=config.FINETUNE_BATCH_SIZE,
+            collate_fn=data_collator
+        )
+
+        # 2. Optimizasyon ve Hızlandırıcı (Accelerator) Ayarları
+        optimizer = AdamW(self.model.parameters(), lr=config.FINETUNE_LEARNING_RATE)
         
-        trainer = Trainer(
-            model=self.model,
-            args=training_args,
-            train_dataset=processed_dataset,
-            tokenizer=self.processor.feature_extractor,
-            data_collator=data_collator,
+        accelerator = Accelerator(
+            mixed_precision="fp16" if torch.cuda.is_available() else "no"
         )
         
-        trainer.train()
+        self.model, optimizer, dataloader = accelerator.prepare(
+            self.model, optimizer, dataloader
+        )
+
+        num_epochs = config.NUM_FINETUNE_EPOCHS
+        num_training_steps = num_epochs * len(dataloader)
+        progress_bar = tqdm(range(num_training_steps))
+
+        # 3. Eğitim Döngüsü
+        self.model.train()
+        for epoch in range(num_epochs):
+            for batch in dataloader:
+                # Forward pass
+                outputs = self.model(**batch)
+                loss = outputs.loss
+                
+                # Backward pass
+                accelerator.backward(loss)
+                
+                optimizer.step()
+                optimizer.zero_grad()
+                
+                progress_bar.update(1)
+                progress_bar.set_description(f"Epoch {epoch+1}/{num_epochs} | Loss: {loss.item():.4f}")
+
+        # 4. Modeli Kaydet
+        print("\n✅ Model ince ayarı tamamlandı!")
         
-        print("✅ Model ince ayarı tamamlandı!")
-        self.model.save_adapter(str(self.output_dir), self.adapter_name)
-        
+        # Modeli unwrapping işlemi ve kaydetme
+        unwrapped_model = accelerator.unwrap_model(self.model)
+        unwrapped_model.save_pretrained(str(self.output_dir))
+
         print(f"💾 Kişiselleştirilmiş model kaydedildi: {self.output_dir}")
         print("\nKullanım için app.py veya config.py dosyasını bu yeni model yolunu kullanacak şekilde güncelleyebilirsiniz.")
 

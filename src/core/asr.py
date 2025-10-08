@@ -6,6 +6,7 @@ import torchaudio
 import soundfile as sf
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 from pyctcdecode import build_ctcdecoder
+from peft import PeftModel
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -24,9 +25,26 @@ class ASRSystem:
         print(f"💻 Kullanılacak cihaz: {self.device}")
 
         try:
-            print(f"📥 '{self.model_name}' modeli yükleniyor...")
-            self.processor = Wav2Vec2Processor.from_pretrained(self.model_name)
-            self.model = Wav2Vec2ForCTC.from_pretrained(self.model_name).to(self.device)
+            # Check if the provided model_name is a directory (i.e., a personalized model path)
+            is_personalized_model = os.path.isdir(self.model_name)
+
+            if is_personalized_model:
+                print(f"📥 Temel model '{config.MODEL_NAME}' yükleniyor...")
+                # 1. Load the base model
+                self.processor = Wav2Vec2Processor.from_pretrained(config.MODEL_NAME)
+                self.model = Wav2Vec2ForCTC.from_pretrained(config.MODEL_NAME).to(self.device)
+                
+                print(f"🎨 Kişiselleştirilmiş adaptör yükleniyor: '{self.model_name}'")
+                # 2. Load and apply the PEFT adapter
+                self.model = PeftModel.from_pretrained(self.model, self.model_name)
+                print("✨ Adaptör başarıyla birleştirildi.")
+
+            else:
+                # Original behavior: load a model directly from Hugging Face hub
+                print(f"📥 '{self.model_name}' modeli yükleniyor...")
+                self.processor = Wav2Vec2Processor.from_pretrained(self.model_name)
+                self.model = Wav2Vec2ForCTC.from_pretrained(self.model_name).to(self.device)
+
             self.model.eval()
             print("✅ ASR Modeli başarıyla yüklendi.")
         except Exception as e:

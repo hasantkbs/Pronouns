@@ -1,7 +1,8 @@
 evaluate
-transformers
-datasets
-accelerate
+transformers==4.41.2
+datasets==2.18.0
+accelerate==0.28.0
+peft==0.10.0
 torch
 torchvision
 torchaudio
@@ -19,4 +20,3 @@ seaborn
 kenlm
 sounddevice
 audiomentations
-adapters
