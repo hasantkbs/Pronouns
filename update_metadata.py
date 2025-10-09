@@ -18,6 +18,7 @@ def update_metadata_words(user_id):
     if metadata_path.exists():
         existing_df = pd.read_csv(metadata_path)
         for _, row in existing_df.iterrows():
+            # Extract filename from potentially Windows-style path
             filename = Path(row["file_path"]).name
             match = re.match(r"Furkan_kelime_(\d+)_rep\d+\.wav", filename)
             if match:
@@ -46,8 +47,10 @@ def update_metadata_words(user_id):
             transcription = word_to_transcription.get(kelime_id)
             
             if transcription is not None:
+                # Construct path relative to data/users/Furkan/
+                relative_filepath = str(Path("words") / filename)
                 new_records.append({
-                    "file_path": str(wav_file),
+                    "file_path": relative_filepath,
                     "transcription": transcription,
                     "repetition": repetition
                 })
