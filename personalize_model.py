@@ -82,11 +82,20 @@ class PersonalizedTrainer:
 
         def audio_loader(path):
             filename = os.path.basename(path)
-            filepath = self.user_data_path / "words" / filename
-            speech, sample_rate = librosa.load(filepath, sr=config.ORNEKLEME_ORANI)
-            return speech
+            filepath = self.user_data_path / "words" / filename # Use self.user_data_path
+            try:
+                speech, sample_rate = librosa.load(filepath, sr=config.ORNEKLEME_ORANI)
+                return speech
+            except FileNotFoundError:
+                print(f"⚠️  Uyarı: Ses dosyası bulunamadı, atlanıyor: {filepath}")
+                return None
+            except Exception as e:
+                print(f"❌ Hata yüklenirken: {filepath} - {e}")
+                return None
 
         df["audio"] = df["file_path"].apply(audio_loader)
+        # Remove rows where audio loading failed
+        df = df.dropna(subset=["audio"])
         
         dataset = Dataset.from_pandas(df)
         print(f"📈 Veri seti boyutu: {len(dataset)} kayıt")
