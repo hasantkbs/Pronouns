@@ -1,5 +1,5 @@
 ---
-base_model: mpoyraz/wav2vec2-xls-r-300m-cv8-turkish
+base_model: openai/whisper-base
 library_name: peft
 ---
 

@@ -26,8 +26,8 @@ USER_ID = "default_user"  # Varsayılan kullanıcı ID'si (kullanıcıya özel v
 # Optimum performans için ayarlandı (küçük kişisel veri setleri için)
 FINETUNE_OUTPUT_DIR = "./asr_model_finetuned"  # İnce ayarlı modelin kaydedileceği dizin
 FINETUNE_BATCH_SIZE = 4  # İnce ayar için batch boyutu (küçük veri setleri için 2 veya 4 idealdir)
-NUM_FINETUNE_EPOCHS = 15  # İnce ayar için epoch sayısı (küçük veri setleri için 10-15 arası önerilir)
+NUM_FINETUNE_EPOCHS = 20  # İnce ayar için epoch sayısı (küçük veri setleri için 10-15 arası önerilir)
 FINETUNE_EVAL_STEPS = 500  # Değerlendirme adımları (şu an kullanılmıyor)
 FINETUNE_LOGGING_STEPS = 10  # Loglama sıklığı (küçük veri setinde daha sık loglama faydalıdır)
-FINETUNE_LEARNING_RATE = 5e-5  # İnce ayar için öğrenme oranı (daha stabil öğrenme için)
-ADAPTER_REDUCTION_FACTOR = 8  # Adapter'ın öğrenme kapasitesi. Düşük değer = daha fazla parametre, potansiyel olarak daha yüksek doğruluk.
+FINETUNE_LEARNING_RATE = 1e-4  # İnce ayar için öğrenme oranı (daha stabil öğrenme için)
+ADAPTER_REDUCTION_FACTOR = 16  # Adapter'ın öğrenme kapasitesi. Düşük değer = daha fazla parametre, potansiyel olarak daha yüksek doğruluk.

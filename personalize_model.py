@@ -13,8 +13,8 @@ import torch
 import pandas as pd
 from pathlib import Path
 from transformers import (
-    Wav2Vec2ForCTC,
-    Wav2Vec2Processor,
+    WhisperForConditionalGeneration,
+    WhisperProcessor,
     TrainingArguments,
     Trainer
 )
@@ -35,7 +35,7 @@ class PersonalizedTrainer:
     
     def __init__(self, user_id, base_model_path=None):
         self.user_id = user_id
-        self.base_model_path = base_model_path or config.MODEL_NAME
+        self.base_model_path = base_model_path or "openai/whisper-small" # Default Whisper small model
         self.user_data_path = Path(config.BASE_PATH) / self.user_id
         self.output_dir = Path("data/models/personalized_models") / self.user_id
         self.adapter_name = "user_adapter"
@@ -50,7 +50,7 @@ class PersonalizedTrainer:
         print("="*50)
         
         if not self.user_data_path.exists() or not (self.user_data_path / "metadata_words.csv").exists():
-            print(f"❌ Hata: {self.user_id} için veri bulunamadı.")
+            print(f"❌ Hata: {self.user_data_path} için veri bulunamadı.")
             print(f"Lütfen önce 'src/training/collect_user_data.py' scriptini çalıştırın.")
             return
 
@@ -61,13 +61,13 @@ class PersonalizedTrainer:
     def load_model_and_processor(self):
         """Temel model ve işlemciyi yükler."""
         print(f"📥 Temel model yükleniyor: {self.base_model_path}")
-        self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
-        self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
+        self.processor = WhisperProcessor.from_pretrained(self.base_model_path, language="tr", task="transcribe")
+        self.model = WhisperForConditionalGeneration.from_pretrained(self.base_model_path)
         self.model.to(self.device)
         peft_config = LoraConfig(
             r=config.ADAPTER_REDUCTION_FACTOR,
             lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2, # A common heuristic
-            target_modules=["q_proj", "v_proj"], # Common target modules for Wav2Vec2
+            target_modules=["q_proj", "v_proj", "k_proj"], # Common target modules for Whisper
             lora_dropout=0.1, # Example dropout
             bias="none",
         )
@@ -95,18 +95,18 @@ class PersonalizedTrainer:
     def preprocess_function(self, examples):
         """Veri ön işleme fonksiyonu."""
         audio_arrays = examples["audio"]
-        inputs = self.processor(
-            audio_arrays, 
-            sampling_rate=config.ORNEKLEME_ORANI, 
-            return_tensors="pt", 
-            padding=True
-        )
-        
-        with self.processor.as_target_processor():
-            labels = self.processor(examples["transcription"]).input_ids
-            
-        examples["input_values"] = inputs.input_values
+        # compute input features from audio
+        inputs = self.processor(audio_arrays, sampling_rate=config.ORNEKLEME_ORANI, return_tensors="pt").input_features
+
+        # encode targets
+        labels = self.processor.tokenizer(text=examples["transcription"]).input_ids
+
+        # create attention mask for inputs
+        attention_mask = torch.ones(inputs.shape[0], inputs.shape[1], dtype=torch.long)
+
+        examples["input_features"] = inputs
         examples["labels"] = labels
+        examples["attention_mask"] = attention_mask
         return examples
 
     def train_model(self, dataset):
@@ -170,6 +170,7 @@ class PersonalizedTrainer:
         # Modeli unwrapping işlemi ve kaydetme
         unwrapped_model = accelerator.unwrap_model(self.model)
         unwrapped_model.save_pretrained(str(self.output_dir))
+        self.processor.save_pretrained(str(self.output_dir))
 
         print(f"💾 Kişiselleştirilmiş model kaydedildi: {self.output_dir}")
         print("\nKullanım için app.py veya config.py dosyasını bu yeni model yolunu kullanacak şekilde güncelleyebilirsiniz.")

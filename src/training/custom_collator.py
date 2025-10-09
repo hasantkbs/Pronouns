@@ -14,15 +14,15 @@ class CustomDataCollatorForCTC:
     padding: Union[bool, str] = True
     
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-        # Split features into input_values and labels.
+        # Split features into input_features and labels.
         # The features are lists of dicts from the dataset.
-        input_features = [{"input_values": feature["input_values"]} for feature in features]
+        input_features_list = [{"input_features": feature["input_features"]} for feature in features]
         label_features = [{"input_ids": feature["labels"]} for feature in features]
 
         # Pad the input features (audio).
-        # The processor's feature extractor handles the padding of input_values.
+        # The processor's feature extractor handles the padding of input_features.
         batch = self.processor.feature_extractor.pad(
-            input_features,
+            input_features_list,
             padding=self.padding,
             return_tensors="pt",
         )
