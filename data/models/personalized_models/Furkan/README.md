@@ -1,5 +1,5 @@
 ---
-base_model: openai/whisper-base
+base_model: openai/whisper-small
 library_name: peft
 ---
 
