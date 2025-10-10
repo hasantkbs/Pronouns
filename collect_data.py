@@ -260,7 +260,7 @@ def main():
     elif choice == '2':
         record_type = "kelime"
         sets_dir = "datasets/words_set"
-        repetitions = 3
+        repetitions = 5
     else:
         record_type = "harf"
         sets_dir = "datasets/letters_set"

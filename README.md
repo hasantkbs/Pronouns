@@ -33,6 +33,20 @@ By default, the script uses a predefined list of sentences. You can provide your
 python src/training/collect_user_data.py --file my_sentences.txt
 ```
 
+### Re-recording Data (`--re-record`)
+
+If you want to re-record a specific list of words or letters, you can use the `--re-record` flag. This is useful for targeting words that the model struggles with.
+
+1.  **Create a file** named `tekrar_kayit.txt` in the `datasets/` directory.
+2.  **Add the words or letters** you want to re-record to this file, one item per line.
+3.  **Run the script** with the `--re-record` flag:
+
+    ```bash
+    python collect_data.py --re-record
+    ```
+
+The script will then guide you through the process of re-recording each item in the `tekrar_kayit.txt` file.
+
 Your recorded audio and a `metadata.csv` file will be saved under `data/users/YOUR_USER_ID/`.
 
 ### Step 2: Personalize the Model

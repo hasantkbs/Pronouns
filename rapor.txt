@@ -1,0 +1,26 @@
+
+# Model Performans Raporu
+
+**Tarih:** 10 Ekim 2025
+
+## Değerlendirilen Model
+
+- **Model:** `openai/whisper-small` temel alınarak "Furkan" kullanıcısı için kişiselleştirilmiş model.
+- **Veri Seti:** "Furkan" kullanıcısına ait 2103 kelime kaydı.
+
+## Performans Metrikleri
+
+- **Kelime Hata Oranı (WER):** 0.6351
+- **Karakter Hata Oranı (CER):** 0.7511
+- **Tahmini Doğruluk Oranı:** %36.49
+
+## Yorum
+
+Mevcut doğruluk oranı, konuşma bozukluğu olan bir kullanıcı için ve kısıtlı bir veri setiyle kişiselleştirilmiş bir model için makul bir başlangıç noktasıdır. Ancak, modelin pratik kullanım için önemli ölçüde iyileştirilmesi gerekmektedir. Düşük doğruluk oranı, modelin kullanıcının konuşma kalıplarını tam olarak öğrenemediğini göstermektedir.
+
+## İyileştirme Önerileri
+
+1.  **Veri Toplama:** Modelin performansını artırmak için en önemli adım, daha fazla ve çeşitli ses verisi toplamaktır. Özellikle modelin yanlış tanıdığı kelimelere odaklanılmalıdır.
+2.  **Kayıt Ortamı:** Ses kayıtlarının daha sessiz bir ortamda ve daha kaliteli bir mikrofonla yapılması, modelin daha doğru öğrenmesine yardımcı olacaktır.
+3.  **Model ve Parametre Güncellemesi:** Bir sonraki eğitim için temel model daha güçlü olan `openai/whisper-medium` olarak güncellenmiş ve epoch sayısı 15'e düşürülmüştür.
+4.  **Sonraki Adım:** `collect_data.py` betiği kullanılarak yeni kelime verileri toplanmalıdır.

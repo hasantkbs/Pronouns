@@ -20,14 +20,14 @@ class ModelEvaluator:
             self.model_to_load = str(self.personalized_model_dir)
             print(f"✅ {self.user_id} için kişiselleştirilmiş model yüklenecek: {self.model_to_load}")
         else:
-            self.model_to_load = model_path or "openai/whisper-base" # Default Whisper base model
+            self.model_to_load = model_path or "openai/whisper-medium" # Default Whisper medium model
             print(f"ℹ️  Kişiselleştirilmiş model bulunamadı. Varsayılan model kullanılacak: {self.model_to_load}")
 
-        self.processor = WhisperProcessor.from_pretrained(self.model_to_load if self.personalized_model_dir.exists() else "openai/whisper-base", language="tr", task="transcribe")
+        self.processor = WhisperProcessor.from_pretrained(self.model_to_load if self.personalized_model_dir.exists() else "openai/whisper-medium", language="tr", task="transcribe")
         
         if self.personalized_model_dir.exists():
             from peft import PeftModel
-            base_model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-base")
+            base_model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-medium")
             self.model = PeftModel.from_pretrained(base_model, str(self.personalized_model_dir))
         else:
             self.model = WhisperForConditionalGeneration.from_pretrained(self.model_to_load)

@@ -35,7 +35,7 @@ class PersonalizedTrainer:
     
     def __init__(self, user_id, base_model_path=None):
         self.user_id = user_id
-        self.base_model_path = base_model_path or "openai/whisper-small" # Default Whisper small model
+        self.base_model_path = base_model_path or "openai/whisper-medium" # Default Whisper medium model
         self.user_data_path = Path(config.BASE_PATH) / self.user_id
         self.output_dir = Path("data/models/personalized_models") / self.user_id
         self.adapter_name = "user_adapter"
