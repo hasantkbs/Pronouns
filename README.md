@@ -102,27 +102,27 @@ python train_model.py
 ```
 After training, you can set this new model as the default in `config.py`.
 
-## Geliştirme Yol Haritası Notları
+## Development Roadmap Notes
 
-### Model Güncellemesi
+### Model Update
 
-Projenin temel ASR modeli, daha yüksek doğruluk sağlamak amacıyla `mpoyraz/wav2vec2-xls-r-300m-cv8-turkish` olarak güncellenmiştir. Bu model, Türkçe için daha büyük bir veri seti üzerinde eğitilmiştir ve daha iyi performans göstermesi beklenmektedir.
+The project's base ASR model has been updated to `mpoyraz/wav2vec2-xls-r-300m-cv8-turkish` to provide higher accuracy. This model is trained on a larger dataset for Turkish and is expected to perform better.
 
-### Veri Toplama Stratejisi Üzerine
+### On Data Collection Strategy
 
-Geniş bir veri seti (örneğin 5000 kelime) toplama sürecini hızlandırmak için "tek tek kelimeleri kaydedip bunları birleştirerek sentetik cümleler oluşturma" fikri değerlendirilmiştir.
+The idea of "creating synthetic sentences by recording individual words and combining them" was evaluated to speed up the process of collecting a large dataset (e.g., 5000 words).
 
-Bu yaklaşımın analizi sonucunda aşağıdaki karara varılmıştır:
+The analysis of this approach led to the following decision:
 
-*   **Temel Sorun:** Bu yöntem, doğal konuşmanın en önemli unsurları olan **tonlama (prozodi)** ve **ses geçişlerini (koartikülasyon)** yok eder. Bu da modelin gerçekçi olmayan, robotik bir konuşma tarzını öğrenmesine ve gerçek dünya performansının düşmesine neden olabilir.
+*   **Core Problem:** This method destroys the most important elements of natural speech: **intonation (prosody)** and **sound transitions (coarticulation)**. This can cause the model to learn an unrealistic, robotic speaking style and reduce real-world performance.
 
-*   **Karar:** Bu yöntem, ana eğitim stratejisi olarak **kullanılmamalıdır**.
+*   **Decision:** This method should **not** be used as the main training strategy.
 
-*   **Önerilen Hibrit Yaklaşım:**
-    1.  **Ana Veri Seti:** Eğitimin temelini oluşturmak için öncelik, **doğal ve akıcı okunmuş tam cümlelerin** kaydedilmesidir. Bu, modelin doğru tonlama ve ritmi öğrenmesini sağlar.
-    2.  **Veri Artırma (Augmentation):** Ana veri setinde az geçen veya hiç bulunmayan kritik kelimeler tek tek kaydedilebilir. Bu kelimelerden oluşturulan sentetik cümleler, toplam eğitim verisinin küçük bir bölümünü (örneğin %10-20) oluşturarak "veri artırma" amacıyla kullanılabilir.
+*   **Proposed Hybrid Approach:**
+    1.  **Main Dataset:** The priority for the foundation of the training is to record **complete sentences read naturally and fluently**. This ensures the model learns correct intonation and rhythm.
+    2.  **Data Augmentation:** Critical words that are rare or non-existent in the main dataset can be recorded individually. Synthetic sentences created from these words can be used for "data augmentation," making up a small portion of the total training data (e.g., 10-20%).
 
-Bu hibrit model, hem modelin doğal konuşmayı öğrenmesini sağlar hem de kelime dağarcığının genişlemesine yardımcı olur.
+This hybrid model allows the model to learn natural speech while also helping to expand its vocabulary.
 
 ---
 
