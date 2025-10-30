@@ -91,6 +91,18 @@ For individuals with speech disorders:
 - **Real-time** audio processing.
 - **Turkish** language support.
 
+### Audio Quality Analysis
+
+To ensure the quality and consistency of the collected data, the `collect_data.py` script includes a real-time audio quality analysis feature. This feature is especially useful for identifying inconsistencies in the pronunciation of a word across multiple repetitions.
+
+**How it works:**
+
+1.  **Embedding Extraction:** After you a record a word or a letter for the specified number of repetitions (e.g., 5 times), the script uses a pre-trained `Whisper` model to extract an "embedding" (a numerical representation) from each audio recording.
+2.  **Similarity Analysis:** The script then calculates the `cosine similarity` between all pairs of embeddings. This provides a measure of how similar the recordings are to each other.
+3.  **Feedback:** If the average similarity score is below `0.80`, the script will display a warning message, suggesting that you may want to re-record the word later using the `--re-record` option.
+
+This feature helps to ensure that the training data is consistent, which can lead to a more accurate and robust personalized model.
+
 ## 🔧 General Model Training (Optional)
 
 If you want to train the base model from scratch on a large dataset (like Mozilla Common Voice), you can use the `train_model.py` script.
