@@ -1,24 +1,16 @@
-# -*- coding: utf-8 -*-
-"""
-Konuşma Bozukluğu Ses Tanıma Sistemi - Kişiselleştirilmiş Model Eğitimi
-
-Bu script, belirli bir kullanıcıdan toplanan verileri kullanarak mevcut bir 
-ASR modelini o kullanıcı için ince ayar (fine-tuning) yapar.
-"""
-
 import os
-
 import argparse
 import torch
 import pandas as pd
 from pathlib import Path
+import dataclasses
+from typing import List, Dict, Union
 from transformers import (
     WhisperForConditionalGeneration,
     WhisperProcessor,
     TrainingArguments,
-    Trainer
+    Trainer,
 )
-from src.training.custom_collator import CustomDataCollatorForCTC
 from peft import LoraConfig, get_peft_model
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
@@ -30,12 +22,38 @@ import soundfile as sf
 from datasets import Dataset, Audio
 
 
+@dataclasses.dataclass
+class DataCollatorSpeechSeq2SeqWithPadding:
+    processor: any
+
+    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+        # split inputs and labels since they have to be of different lengths and need
+        # different padding methods
+        input_features = [{"input_features": feature["input_features"]} for feature in features]
+        label_features = [{"input_ids": feature["labels"]} for feature in features]
+
+        batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
+
+        labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
+
+        # replace padding with -100 to ignore loss correctly
+        labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
+
+        # if bos token is appended in previous tokenization step,
+        # cut bos token here as it's append later anyways
+        if (labels[:, 0] == self.processor.tokenizer.bos_token_id).all().cpu().item():
+            labels = labels[:, 1:]
+
+        batch["labels"] = labels
+
+        return batch
+
 class PersonalizedTrainer:
     """Kullanıcıya özel model eğitici."""
     
     def __init__(self, user_id, base_model_path=None):
         self.user_id = user_id
-        self.base_model_path = base_model_path or "openai/whisper-medium" # Default Whisper medium model
+        self.base_model_path = base_model_path or "openai/whisper-large-v2" # Default Whisper large model
         self.user_data_path = Path(config.BASE_PATH) / self.user_id
         self.output_dir = Path("data/models/personalized_models") / self.user_id
         self.adapter_name = "user_adapter"
@@ -103,20 +121,14 @@ class PersonalizedTrainer:
 
     def preprocess_function(self, examples):
         """Veri ön işleme fonksiyonu."""
-        audio_arrays = examples["audio"]
-        # compute input features from audio
-        inputs = self.processor(audio_arrays, sampling_rate=config.ORNEKLEME_ORANI, return_tensors="pt").input_features
+        audio_arrays = [x for x in examples["audio"]]
+        
+        model_inputs = self.processor(audio_arrays, sampling_rate=config.ORNEKLEME_ORANI, return_tensors="pt", padding="max_length", truncation=True)
+        
+        labels = self.processor.tokenizer(text=examples["transcription"], padding=True, truncation=True).input_ids
+        model_inputs["labels"] = labels
 
-        # encode targets
-        labels = self.processor.tokenizer(text=examples["transcription"]).input_ids
-
-        # create attention mask for inputs
-        attention_mask = torch.ones(inputs.shape[0], inputs.shape[1], dtype=torch.long)
-
-        examples["input_features"] = inputs
-        examples["labels"] = labels
-        examples["attention_mask"] = attention_mask
-        return examples
+        return model_inputs
 
     def train_model(self, dataset):
         """Modeli, transformers.Trainer kullanmadan manuel bir PyTorch döngüsü ile eğitir."""
@@ -130,10 +142,7 @@ class PersonalizedTrainer:
             batch_size=config.FINETUNE_BATCH_SIZE
         )
 
-        data_collator = CustomDataCollatorForCTC(
-            processor=self.processor,
-            padding=True
-        )
+        data_collator = DataCollatorSpeechSeq2SeqWithPadding(processor=self.processor)
 
         dataloader = DataLoader(
             processed_dataset,
@@ -145,7 +154,8 @@ class PersonalizedTrainer:
         optimizer = AdamW(self.model.parameters(), lr=config.FINETUNE_LEARNING_RATE)
         
         accelerator = Accelerator(
-            mixed_precision="fp16" if torch.cuda.is_available() else "no"
+            mixed_precision="fp16" if torch.cuda.is_available() else "no",
+            gradient_accumulation_steps=config.GRADIENT_ACCUMULATION_STEPS
         )
         
         self.model, optimizer, dataloader = accelerator.prepare(
@@ -159,16 +169,17 @@ class PersonalizedTrainer:
         # 3. Eğitim Döngüsü
         self.model.train()
         for epoch in range(num_epochs):
-            for batch in dataloader:
-                # Forward pass
-                outputs = self.model(**batch)
-                loss = outputs.loss
-                
-                # Backward pass
-                accelerator.backward(loss)
-                
-                optimizer.step()
-                optimizer.zero_grad()
+            for step, batch in enumerate(dataloader):
+                with accelerator.accumulate(self.model):
+                    # Forward pass
+                    outputs = self.model(**batch)
+                    loss = outputs.loss
+                    
+                    # Backward pass
+                    accelerator.backward(loss)
+                    
+                    optimizer.step()
+                    optimizer.zero_grad()
                 
                 progress_bar.update(1)
                 progress_bar.set_description(f"Epoch {epoch+1}/{num_epochs} | Loss: {loss.item():.4f}")

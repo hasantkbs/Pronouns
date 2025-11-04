@@ -1,6 +1,10 @@
 ---
-base_model: openai/whisper-small
+base_model: openai/whisper-large-v2
 library_name: peft
+tags:
+- base_model:adapter:openai/whisper-large-v2
+- lora
+- transformers
 ---
 
 # Model Card for Model ID
@@ -199,4 +203,5 @@ Carbon emissions can be estimated using the [Machine Learning Impact calculator]
 [More Information Needed]
 ### Framework versions
 
+- PEFT 0.17.1
 - PEFT 0.10.0

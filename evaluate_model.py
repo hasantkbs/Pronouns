@@ -27,7 +27,7 @@ class ModelEvaluator:
         
         if self.personalized_model_dir.exists():
             from peft import PeftModel
-            base_model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-medium")
+            base_model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-large-v2")
             self.model = PeftModel.from_pretrained(base_model, str(self.personalized_model_dir))
         else:
             self.model = WhisperForConditionalGeneration.from_pretrained(self.model_to_load)
