@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+from src.utils.utils import save_model
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import config
 import torch
@@ -182,11 +183,12 @@ def main():
     )
 
     # 8. Eğitimi Başlat
-    print("\n--- Model Eğitimi Başlatılıyor ---")
-    trainer.train()
-
-    # 9. Eğitilmiş Modeli Kaydet
-    print("Eğitim tamamlandı. Model kaydediliyor...")
-    trainer.save_model(config.FINETUNE_OUTPUT_DIR)
-    processor.save_pretrained(config.FINETUNE_OUTPUT_DIR)
-    print(f"Model başarıyla '{config.FINETUNE_OUTPUT_DIR}' klasörüne kaydedildi.")
+    
+        print("\n--- Model Eğitimi Başlatılıyor ---")
+        trainer.train()
+    
+        # 9. Eğitilmiş Modeli Kaydet
+        print("Eğitim tamamlandı. Model kaydediliyor...")
+        save_model(trainer.model, processor, config.FINETUNE_OUTPUT_DIR)
+        print(f"Model başarıyla '{config.FINETUNE_OUTPUT_DIR}' klasörüne kaydedildi.")
+    

@@ -13,6 +13,7 @@ from torch.optim import AdamW
 from accelerate import Accelerator
 from tqdm import tqdm
 import config
+from src.utils.utils import save_model
 import librosa
 from datasets import Dataset
 
@@ -106,9 +107,7 @@ def main():
     # 5. Save the fine-tuned model
     output_dir = Path("data/models/personalized_models") / args.user_id
     unwrapped_model = accelerator.unwrap_model(model)
-    unwrapped_model.save_pretrained(output_dir)
-    processor.save_pretrained(output_dir)
-    print(f"💾 Kişiselleştirilmiş model kaydedildi: {output_dir}")
+    save_model(unwrapped_model, processor, output_dir)
 
 if __name__ == "__main__":
     main()

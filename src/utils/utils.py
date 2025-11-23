@@ -155,6 +155,15 @@ def get_audio_info(file_path: str) -> dict:
         print(f"❌ Ses dosyası bilgisi alınamadı: {e}")
         return {}
 
+def save_model(model, processor, path: str):
+    """
+    Saves the model and processor to the given path.
+    """
+    os.makedirs(path, exist_ok=True)
+    model.save_pretrained(path)
+    processor.save_pretrained(path)
+    print(f"✅ Model saved to {path}")
+
 if __name__ == '__main__':
     print("🎧 Ses Kayıt Testi")
     print("=" * 30)

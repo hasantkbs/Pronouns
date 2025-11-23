@@ -20,6 +20,7 @@ import config
 import librosa
 import soundfile as sf
 from datasets import Dataset, Audio
+from src.utils.utils import save_model
 
 
 @dataclasses.dataclass
@@ -189,8 +190,7 @@ class PersonalizedTrainer:
         
         # Modeli unwrapping işlemi ve kaydetme
         unwrapped_model = accelerator.unwrap_model(self.model)
-        unwrapped_model.save_pretrained(str(self.output_dir))
-        self.processor.save_pretrained(str(self.output_dir))
+        save_model(unwrapped_model, self.processor, str(self.output_dir))
 
         print(f"💾 Kişiselleştirilmiş model kaydedildi: {self.output_dir}")
         print("\nKullanım için app.py veya config.py dosyasını bu yeni model yolunu kullanacak şekilde güncelleyebilirsiniz.")

@@ -4,6 +4,7 @@
 import os
 import sys
 from src.utils.reporting import generate_report
+from src.utils.utils import save_model
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import config
 import argparse
@@ -322,8 +323,7 @@ def main():
     trainer.train()
 
     print("\n--- Eğitim tamamlandı. Son model kaydediliyor. ---")
-    trainer.save_model(args.output_dir)
-    processor.save_pretrained(args.output_dir)
+    save_model(trainer.model, processor, args.output_dir)
     print(f"Model başarıyla '{args.output_dir}' klasörüne kaydedildi.")
 
     # --- Hatalı Tahminleri Loglama ---
