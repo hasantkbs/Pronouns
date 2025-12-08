@@ -1,167 +1,141 @@
-# Speech Disorder Recognition System
+# Speech Recognition and Personalization System
 
-This project is a **simple and focused system** specially designed for **individuals with speech disorders** to recognize their speech and convert it to text. The system uses a `Wav2Vec2`-based ASR (Automatic Speech Recognition) model and supports **personalization** to adapt to a specific user's voice.
+This project is an **Automatic Speech Recognition (ASR) system** designed to assist individuals with speech disorders by accurately converting their speech to text. It leverages state-of-the-art `Whisper` models from the Hugging Face `transformers` library and supports **user-specific personalization** for enhanced accuracy.
 
-## 🚀 Workflow: From Zero to Personalized Recognition
+## ✨ Features
 
-This guide explains how to collect personal voice data, train a personalized model, and use it in the main application.
+*   **Accurate Speech-to-Text:** Utilizes powerful `Whisper` models for high-fidelity speech recognition.
+*   **User-Specific Personalization:** Efficiently fine-tune models for individual users using Parameter-Efficient Fine-Tuning (PEFT), specifically LoRA.
+*   **Flexible Data Collection:** Includes scripts for collecting custom voice data (words, sentences) from users.
+*   **Dynamic Model Loading:** The main application (`app.py`) automatically detects and loads a user's personalized model if available.
+*   **Turkish Language Support:** Optimized for Turkish speech recognition.
+*   **Performance Optimizations for Training:**
+    *   **Parallel Data Preprocessing:** Utilizes multi-core CPUs for faster dataset preparation.
+    *   **Gradient Checkpointing:** Reduces GPU memory consumption during full model fine-tuning.
+    *   **Optional Flash Attention 2:** Significantly accelerates training on compatible CUDA-enabled GPUs.
 
-### Step 1: Collect Personal Data
+## 🚀 Getting Started
 
-This script records your voice for a series of sentences and prepares the data for training.
+### 1. Prerequisites
 
-1.  **Navigate to the project directory** in your terminal.
-2.  **Run the data collection script.**
+*   **Python 3.9+**
+*   `pip` (Python package installer)
+*   **FFmpeg (System-wide):** Essential for various audio processing tasks. Install it using your system's package manager:
+    *   **Ubuntu/Debian:** `sudo apt update && sudo apt install ffmpeg`
+    *   **macOS (with Homebrew):** `brew install ffmpeg`
+    *   **Windows (with Chocolatey):** `choco install ffmpeg`
+    *   Or download from [FFmpeg Official Website](https://ffmpeg.org/download.html).
 
+### 2. Installation
+
+1.  **Clone the repository:**
     ```bash
-    python collect_data.py
+    git clone https://github.com/your_username/Pronouns.git
+    cd Pronouns
     ```
-3.  **Enter a User ID** when prompted (e.g., `user_001`, `hasan`, etc.). This ID will be used to save your data.
-4.  **Read the sentences** that appear on the screen. Press ENTER before each sentence to start recording.
+    *(Replace `https://github.com/your_username/Pronouns.git` with your actual repository URL)*
 
-#### Using a Custom Sentence List
+2.  **Create and activate a Python virtual environment:**
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    ```
 
-By default, the script uses a predefined list of sentences. You can provide your own list in a `.txt` file (one sentence per line).
+3.  **Install project dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4.  **Optional: Install Flash Attention 2 (for compatible CUDA GPUs):**
+    If you are training on a server with a compatible NVIDIA GPU (e.g., A100, H100) and have the necessary CUDA setup, installing `flash-attn` can significantly speed up training.
+    ```bash
+    # Ensure you are in your activated virtual environment
+    pip install flash-attn --no-build-isolation
+    ```
+    *(Note: `flash-attn` may be difficult to install on non-Linux or non-CUDA systems. The code will gracefully fall back if it's not available.)*
+
+### 3. Project Structure Overview
+
+*   `app.py`: The main application to run real-time speech recognition.
+*   `config.py`: Centralized configuration settings for models, data paths, and training.
+*   `scripts/data_management/`: Utility scripts for managing and fixing data.
+*   `train_full.py`: Script for full fine-tuning of a Whisper model (e.g., a base model on a large dataset).
+*   `train_adapter.py`: Script for efficient, user-specific fine-tuning using LoRA (PEFT).
+*   `src/core/`: Contains core ASR and Natural Language Understanding (NLU) logic.
+*   `data/`: Directory for storing user-specific data, personalized models, etc.
+
+## 👨‍💻 Usage
+
+### 1. Collect Personal Data
+
+Use `collect_data.py` to record speech data for a specific user.
 
 ```bash
-# Create a text file with your sentences
-# my_sentences.txt
-#   "First custom sentence."
-#   "Another sentence to record."
+python collect_data.py
+```
+*   You will be prompted to enter a `User ID`.
+*   The script will display sentences/words for you to read. Press `ENTER` to start recording for each prompt.
+*   Recorded audio and metadata will be saved under `data/users/YOUR_USER_ID/`.
 
-# Run the script with the --file argument
-python src/training/collect_user_data.py --file my_sentences.txt
+#### Re-recording Specific Items
+
+To re-record words/letters the model struggles with, create a `tekrar_kayit.txt` file in the `datasets/` directory (one item per line) and run:
+```bash
+python collect_data.py --re-record
 ```
 
-### Re-recording Data (`--re-record`)
+#### Audio Quality Analysis
 
-If you want to re-record a specific list of words or letters, you can use the `--re-record` flag. This is useful for targeting words that the model struggles with.
+The `collect_data.py` script includes real-time audio quality analysis using Whisper embeddings. If the similarity between repetitions of a word is low, it suggests re-recording for better model accuracy.
 
-1.  **Create a file** named `tekrar_kayit.txt` in the `datasets/` directory.
-2.  **Add the words or letters** you want to re-record to this file, one item per line.
-3.  **Run the script** with the `--re-record` flag:
+### 2. Personalize Your Model (Efficient Fine-tuning)
 
-    ```bash
-    python collect_data.py --re-record
-    ```
-
-The script will then guide you through the process of re-recording each item in the `tekrar_kayit.txt` file.
-
-Your recorded audio and a `metadata.csv` file will be saved under `data/users/YOUR_USER_ID/`.
-
-### Step 2: Personalize the Model
-
-This script fine-tunes the base ASR model using your collected data.
-
-1.  **Run the personalization script** with the same User ID you used in Step 1.
-
-    ```bash
-    python personalize_model.py YOUR_USER_ID
-    ```
-    *(Replace `YOUR_USER_ID` with the actual ID, e.g., `python personalize_model.py hasan`)*
-
-2.  The script will load the base model, fine-tune it with your data, and save the new, personalized model to `data/models/personalized_models/YOUR_USER_ID/`.
-
-### Step 3: Run the Application
-
-Now you can use the main application, which will automatically load your personalized model.
-
-1.  **Start the application.**
-    ```bash
-    python app.py
-    ```
-2.  **Enter your User ID** when prompted.
-3.  The system will detect your personalized model and load it. If no personalized model is found for the ID, it will fall back to the default model.
-4.  Press **ENTER** to speak, and the system will transcribe your speech using the appropriate model.
-
----
-
-## 🎯 Project Purpose
-
-For individuals with speech disorders:
-- **Convert speech to text** with high accuracy through personalization.
-- **Facilitate communication** and **increase independence**.
-
-## ⚙️ Features
-
-- **Personalized Model Training:** Fine-tune the model for a specific user's voice for significantly improved accuracy.
-- **Flexible Data Collection:** Use a default list of sentences or provide your own via a text file.
-- **Dynamic Model Loading:** The app automatically detects and loads a user's personalized model if it exists.
-- **High-accuracy** base model (`Wav2Vec2`).
-- **Real-time** audio processing.
-- **Turkish** language support.
-
-### Audio Quality Analysis
-
-To ensure the quality and consistency of the collected data, the `collect_data.py` script includes a real-time audio quality analysis feature. This feature is especially useful for identifying inconsistencies in the pronunciation of a word across multiple repetitions.
-
-**How it works:**
-
-1.  **Embedding Extraction:** After you a record a word or a letter for the specified number of repetitions (e.g., 5 times), the script uses a pre-trained `Whisper` model to extract an "embedding" (a numerical representation) from each audio recording.
-2.  **Similarity Analysis:** The script then calculates the `cosine similarity` between all pairs of embeddings. This provides a measure of how similar the recordings are to each other.
-3.  **Feedback:** If the average similarity score is below `0.80`, the script will display a warning message, suggesting that you may want to re-record the word later using the `--re-record` option.
-
-This feature helps to ensure that the training data is consistent, which can lead to a more accurate and robust personalized model.
-
-## 🔧 General Model Training (Optional)
-
-If you want to train the base model from scratch on a large dataset (like Mozilla Common Voice), you can use the `train_model.py` script.
+Use `train_adapter.py` to fine-tune a Whisper model specifically for a user's voice using LoRA (PEFT). This is highly recommended for user personalization due to its efficiency.
 
 ```bash
-# This requires a large, pre-processed dataset in the `downloaded_data` folder.
-# (GPU recommended)
-python train_model.py
+python train_adapter.py YOUR_USER_ID --base_model openai/whisper-small
 ```
-After training, you can set this new model as the default in `config.py`.
+*(Replace `YOUR_USER_ID` with the actual ID. You can also specify a different `--base_model`.)*
+The personalized model will be saved to `data/models/personalized_models/YOUR_USER_ID/`.
 
-## Development Roadmap Notes
+### 3. Run the Application
 
-### Model Update
-
-The project's base ASR model has been updated to `mpoyraz/wav2vec2-xls-r-300m-cv8-turkish` to provide higher accuracy. This model is trained on a larger dataset for Turkish and is expected to perform better.
-
-### On Data Collection Strategy
-
-The idea of "creating synthetic sentences by recording individual words and combining them" was evaluated to speed up the process of collecting a large dataset (e.g., 5000 words).
-
-The analysis of this approach led to the following decision:
-
-*   **Core Problem:** This method destroys the most important elements of natural speech: **intonation (prosody)** and **sound transitions (coarticulation)**. This can cause the model to learn an unrealistic, robotic speaking style and reduce real-world performance.
-
-*   **Decision:** This method should **not** be used as the main training strategy.
-
-*   **Proposed Hybrid Approach:**
-    1.  **Main Dataset:** The priority for the foundation of the training is to record **complete sentences read naturally and fluently**. This ensures the model learns correct intonation and rhythm.
-    2.  **Data Augmentation:** Critical words that are rare or non-existent in the main dataset can be recorded individually. Synthetic sentences created from these words can be used for "data augmentation," making up a small portion of the total training data (e.g., 10-20%).
-
-This hybrid model allows the model to learn natural speech while also helping to expand its vocabulary.
-
----
-
-## 🚀 Installation
-
-### 1. Create Conda Environment
+Start the main application to use the ASR system.
 
 ```bash
-# Create new conda environment
-conda create -n pronouns python=3.9
-conda activate pronouns
-
-# Install project dependencies
-pip install -r requirements.txt
+python app.py
 ```
+*   Enter your `User ID` when prompted.
+*   The system will automatically detect and load your personalized model if it exists. Otherwise, it will use the default model specified in `config.py`.
 
-### 2. Language Model Installation (Optional)
+### 4. Full Model Fine-tuning (Advanced/Optional)
 
-For higher accuracy, you can install the KenLM language model. Download the model and update the `KENLM_MODEL_PATH` in `config.py`.
+For training a base Whisper model from scratch on a large dataset or for a full fine-tune (not LoRA), use `train_full.py`. This usually requires significant computational resources.
+
+```bash
+python train_full.py YOUR_USER_ID --base_model openai/whisper-base
+```
+*(This script includes Gradient Checkpointing for VRAM optimization.)*
+
+## 📈 Performance Considerations
+
+*   **Parallel Preprocessing:** Data loading and preprocessing steps are parallelized across available CPU cores for speed.
+*   **Gradient Checkpointing:** Enabled in `train_full.py` to optimize GPU memory usage.
+*   **Flash Attention 2:** Automatically attempted in training scripts if `flash-attn` is installed and compatible hardware is present, providing substantial speedups on supported GPUs.
+
+## 🇹🇷 Language Model (Optional)
+
+For further accuracy improvements, especially for Turkish, you can integrate a KenLM language model.
+1.  Download a pre-trained Turkish KenLM model.
+2.  Update the `KENLM_MODEL_PATH` variable in `config.py` to point to your downloaded model.
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/new-feature`)
-3. Commit changes (`git commit -am 'New feature added'`)
-4. Push to branch (`git push origin feature/new-feature`)
-5. Create Pull Request
+1.  Fork the repository
+2.  Create feature branch (`git checkout -b feature/new-feature`)
+3.  Commit changes (`git commit -am 'New feature added'`)
+4.  Push to branch (`git push origin feature/new-feature`)
+5.  Create Pull Request
 
 ## 📄 License
 
