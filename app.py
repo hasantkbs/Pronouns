@@ -3,9 +3,7 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.append(os.path.dirname(__file__)) # Add current directory to path for local imports
-sys.path.append(os.path.dirname(os.path.dirname(__file__))) # Add parent directory for src imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) # Add project root for config import
+
 
 import config
 from src.core.asr import ASRSystem
