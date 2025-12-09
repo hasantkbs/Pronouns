@@ -1,79 +1,79 @@
+
 # -*- coding: utf-8 -*-
+import os
 import torch
 import librosa
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
+from peft import PeftModel
+import config
 
 class ASRSystem:
-    """
-    Otomatik Konuşma Tanıma (ASR) sistemi.
-    Bu sürüm, Hugging Face Transformers kütüphanesini kullanarak yerel olarak
-    ince ayarlanmış (fine-tuned) veya standart Whisper modellerini yükler.
-    """
+    """Otomatik Konuşma Tanıma (ASR) sistemi."""
 
-    def __init__(self, model_name="openai/whisper-base"):
-        """
-        ASR Sistemini başlatır.
-
-        Args:
-            model_name (str): Yüklenecek modelin Hugging Face Hub adı veya yerel dosya yolu.
-        """
+    def __init__(self, model_name="base"):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"ASR Sistemi için model yükleniyor: '{model_name}'")
         
-        try:
-            self.processor = WhisperProcessor.from_pretrained(model_name)
+        # Check if model_name is a path to a personalized model
+        if os.path.exists(model_name):
+            # It's a personalized model
+            base_model_name = config.MODEL_NAME
+            peft_model_path = model_name
+            
+            self.processor = WhisperProcessor.from_pretrained(base_model_name, language="tr", task="transcribe")
+            
+            base_model = WhisperForConditionalGeneration.from_pretrained(base_model_name)
+            
+            self.model = PeftModel.from_pretrained(base_model, peft_model_path)
+            self.model.to(self.device)
+            print(f"ASR Sistemi başlatıldı. Kişiselleştirilmiş Model: {peft_model_path}, Cihaz: {self.device}")
+        else:
+            # It's a standard model from the hub
+            self.processor = WhisperProcessor.from_pretrained(model_name, language="tr", task="transcribe")
             self.model = WhisperForConditionalGeneration.from_pretrained(model_name)
             self.model.to(self.device)
-            self.model.eval() # Modeli değerlendirme moduna al
-        except Exception as e:
-            print(f"HATA: Model veya işlemci yüklenemedi: {e}")
-            print("Lütfen model adının veya yolunun doğru olduğundan emin olun.")
-            raise
-
-        print(f"✅ ASR Sistemi başarıyla başlatıldı. Model: '{model_name}', Cihaz: {self.device}")
+            print(f"ASR Sistemi başlatıldı. Model: {model_name}, Cihaz: {self.device}")
 
     def transcribe(self, audio_path):
-        """
-        Verilen ses dosyasını metne dönüştürür.
-
-        Args:
-            audio_path (str): Ses dosyasının yolu.
-
-        Returns:
-            str: Tanınan metin veya hata durumunda None.
-        """
+        """Verilen ses dosyasını metne dönüştürür."""
         try:
-            # 1. Ses dosyasını yükle ve yeniden örnekle
-            speech_array, sampling_rate = librosa.load(audio_path, sr=self.processor.feature_extractor.sampling_rate)
+            speech, sr = librosa.load(audio_path, sr=16000)
             
-            # 2. Sesi işleyerek modelin beklediği formata getir
-            input_features = self.processor(speech_array, sampling_rate=sampling_rate, return_tensors="pt").input_features
-
-            # 3. Model ile metin tahmini yap
-            with torch.no_grad():
-                predicted_ids = self.model.generate(input_features.to(self.device))
-
-            # 4. Tahmin edilen token'ları metne çevir
+            input_features = self.processor(speech, sampling_rate=sr, return_tensors="pt").input_features
+            input_features = input_features.to(self.device)
+            
+            predicted_ids = self.model.generate(input_features)
+            
             transcription = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
             
-            return transcription.strip()
-            
+            return transcription
         except Exception as e:
-            print(f"HATA: ASR transkripsiyon hatası: {e}")
+            print(f"ASR transkripsiyon hatası: {e}")
             return None
 
 if __name__ == '__main__':
-    # Bu testin çalışması için 'openai/whisper-base' modelinin indirilmesi gerekir.
-    # İnternet bağlantısı gerektirebilir.
-    print("\n--- ASR Sınıfı Testi Başlatılıyor ---")
-    try:
-        # Varsayılan model ile test et
-        asr_system = ASRSystem("openai/whisper-base") 
-        print("Test için geçici bir boş ses dosyası kullanılıyor...")
-        # Not: Gerçek bir ses dosyası ile test etmek daha doğru sonuç verir.
-        # test_file = "path/to/your/test/audio.wav" 
-        # recognized_text = asr_system.transcribe(test_file)
-        # print(f"Tanınan metin: '{recognized_text}'")
-        print("✅ ASR sınıfı başarıyla yüklendi ve test edildi.")
-    except Exception as e:
-        print(f"❌ ASR sınıfı testi sırasında hata oluştu: {e}")
+    # This part is for testing the ASRSystem class directly.
+    # It requires a valid audio file.
+    
+    # Example with a personalized model (if available)
+    user_id = "Furkan"
+    personalized_model_dir = f"data/models/personalized_models/{user_id}"
+    
+    if os.path.exists(personalized_model_dir):
+        print("Kişiselleştirilmiş model ile test ediliyor...")
+        asr_system = ASRSystem(model_name=personalized_model_dir)
+    else:
+        print("Varsayılan 'base' modeli ile test ediliyor...")
+        asr_system = ASRSystem(model_name="base")
+
+    # You need to provide a path to a test audio file.
+    # For example:
+    test_file = "data/users/Furkan/words/Furkan_kelime_1_rep1.wav" 
+    
+    if os.path.exists(test_file):
+        print(f"\n--- ASR Testi Başlatılıyor ---")
+        print(f"Test dosyası: {test_file}")
+        recognized_text = asr_system.transcribe(test_file)
+        print(f"\nTest tamamlandı.")
+        print(f"Tanınan metin: '{recognized_text}'")
+    else:
+        print(f"Test dosyası bulunamadı: {test_file}")

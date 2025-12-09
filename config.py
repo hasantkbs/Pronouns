@@ -4,7 +4,7 @@ Konuşma Bozukluğu Ses Tanıma Sistemi - Yapılandırma Dosyası
 """
 
 # --- ASR Model Ayarları ---
-MODEL_NAME = "mpoyraz/wav2vec2-xls-r-300m-cv8-turkish"  # Varsayılan model
+MODEL_NAME = "openai/whisper-large-v2"  # Varsayılan model
 ORNEKLEME_ORANI = 16000  # Hz
 
 # --- Dil Modeli Ayarları (Opsiyonel) ---

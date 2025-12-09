@@ -20,6 +20,4 @@ seaborn
 kenlm
 sounddevice
 audiomentations
-# Opsiyonel - Performans artışı için CUDA destekli Linux sunucularda manuel olarak kurun:
-# ./venv/bin/python -m pip install flash-attn --no-build-isolation
-
+openai-whisper
