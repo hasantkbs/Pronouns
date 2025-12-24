@@ -20,22 +20,30 @@ def main():
     
     # 0. Kullanıcı Kimliğini Al ve Kişiselleştirilmiş Modeli Kontrol Et
     user_id = get_user_id()
+    if not user_id:
+        print("❌ Kullanıcı kimliği girilmedi. Sistem kapatılıyor.")
+        return
+    
     personalized_model_path = Path("data/models/personalized_models") / user_id
     model_to_load = None
 
-    if personalized_model_path.exists():
+    if personalized_model_path.exists() and any(personalized_model_path.iterdir()):
         print(f"✅ {user_id} için kişiselleştirilmiş model bulundu!")
         model_to_load = str(personalized_model_path)
     else:
-        print("ℹ️  Kişiselleştirilmiş model bulunamadı. Varsayılan model kullanılacak.")
-        model_to_load = config.MODEL_NAME
+        print(f"ℹ️  {user_id} için kişiselleştirilmiş model bulunamadı.")
+        print(f"   Varsayılan model kullanılacak: {config.MODEL_NAME}")
+        model_to_load = None  # None geçildiğinde ASRSystem config'deki modeli kullanır
 
     # 1. Sistemleri Başlat
     try:
+        print("\n🔄 ASR sistemi başlatılıyor...")
         asr_system = ASRSystem(model_name=model_to_load)
-        nlu_system = NLU_System() # Added
+        nlu_system = NLU_System()
     except Exception as e:
-        print(f"Sistem başlatılırken kritik bir hata oluştu: {e}")
+        print(f"❌ Sistem başlatılırken kritik bir hata oluştu: {e}")
+        import traceback
+        traceback.print_exc()
         return
 
     print("\n=========================================")

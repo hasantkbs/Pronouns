@@ -4,8 +4,9 @@ Konuşma Bozukluğu Ses Tanıma Sistemi - Yapılandırma Dosyası
 """
 
 # --- ASR Model Ayarları ---
+# Wav2Vec2 tabanlı Türkçe ASR modeli
 MODEL_NAME = "mpoyraz/wav2vec2-xls-r-300m-cv7-turkish"  # Varsayılan model
-ORNEKLEME_ORANI = 16000  # Hz
+ORNEKLEME_ORANI = 16000  # Hz (Wav2Vec2 için standart örnekleme oranı)
 
 # --- Dil Modeli Ayarları (Opsiyonel) ---
 # Daha yüksek doğruluk için KenLM dil modeli kullanılabilir

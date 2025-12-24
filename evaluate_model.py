@@ -40,64 +40,185 @@ class ModelEvaluator:
         self.wer_metric = evaluate.load("wer")
         self.cer_metric = evaluate.load("cer")
 
-    def prepare_dataset(self):
-        if not self.data_path.exists():
-            print(f"❌ Hata: {self.data_path} bulunamadı. Lütfen doğru yolu sağlayın.")
+    def prepare_dataset(self, max_samples=None):
+        """
+        Değerlendirme veri setini hazırlar.
+        
+        Args:
+            max_samples: Maksimum örnek sayısı (None ise tümü)
+        
+        Returns:
+            Dataset veya None (hata durumunda)
+        """
+        # Önce eval.csv'yi kontrol et
+        eval_csv = Path(config.BASE_PATH) / self.user_id / "eval.csv"
+        if eval_csv.exists():
+            print(f"   ✅ eval.csv bulundu, kullanılıyor.")
+            df = pd.read_csv(eval_csv, encoding='utf-8')
+        elif self.data_path.exists():
+            print(f"   ⚠️  eval.csv bulunamadı, metadata_words.csv kullanılıyor.")
+            df = pd.read_csv(self.data_path, encoding='utf-8')
+            df = df[['file_path', 'transcription']].copy()
+            df.rename(columns={'transcription': 'transcript'}, inplace=True)
+        else:
+            print(f"❌ Hata: Ne eval.csv ne de {self.data_path} bulunamadı.")
             return None
 
-        df = pd.read_csv(self.data_path).head(500)
+        # Maksimum örnek sayısı sınırı
+        if max_samples and len(df) > max_samples:
+            print(f"   ⚠️  {len(df)} örnek var, {max_samples} ile sınırlandırılıyor.")
+            df = df.head(max_samples)
 
+        # Dosya yollarını düzelt
+        words_dir = Path(config.BASE_PATH) / self.user_id / "words"
         df["file_path"] = df["file_path"].apply(
-            lambda x: str(Path(config.BASE_PATH) / self.user_id / "words" / os.path.basename(x))
+            lambda x: str(words_dir / os.path.basename(str(x)))
         )
-        # Filter out non-existent files
+        
+        # Var olmayan dosyaları filtrele
+        original_size = len(df)
         df = df[df["file_path"].apply(os.path.exists)]
+        if len(df) < original_size:
+            print(f"   ⚠️  {original_size - len(df)} adet bulunamayan ses dosyası atlandı.")
 
-        dataset = Dataset.from_pandas(df).cast_column("file_path", Audio(sampling_rate=config.ORNEKLEME_ORANI, decode=False))
+        if len(df) == 0:
+            print(f"❌ Hata: Hiç geçerli ses dosyası bulunamadı!")
+            return None
+
+        # Transcript sütununu kontrol et
+        transcript_col = 'transcript' if 'transcript' in df.columns else 'transcription'
+        df = df[df[transcript_col].notna() & (df[transcript_col].str.strip() != '')]
+
+        dataset = Dataset.from_pandas(df).cast_column(
+            "file_path", 
+            Audio(sampling_rate=config.ORNEKLEME_ORANI, decode=False)
+        )
+        
+        print(f"   📊 Değerlendirme seti: {len(dataset)} örnek")
         return dataset
 
-    def evaluate_model(self, dataset):
+    def evaluate_model(self, dataset, max_samples=None):
+        """
+        Modeli değerlendirir ve WER/CER metriklerini hesaplar.
+        
+        Args:
+            dataset: Değerlendirme veri seti
+            max_samples: Maksimum değerlendirilecek örnek sayısı
+        """
         if dataset is None:
+            print("❌ Değerlendirme veri seti yok!")
             return
         
         from torch.utils.data import DataLoader
 
         def collate_fn(batch):
-            audio_arrays = [librosa.load(item['file_path']['path'], sr=config.ORNEKLEME_ORANI)[0] for item in batch]
-            reference_texts = [item['transcription'] for item in batch]
-            input_features = self.processor(audio_arrays, sampling_rate=config.ORNEKLEME_ORANI, return_tensors="pt", padding=True, truncation=True, max_length=96000).input_values
-            return {"input_features": input_features, "reference_texts": reference_texts}
+            """Batch için collate fonksiyonu."""
+            audio_arrays = []
+            reference_texts = []
+            
+            for item in batch:
+                try:
+                    audio, sr = librosa.load(
+                        item['file_path']['path'], 
+                        sr=config.ORNEKLEME_ORANI
+                    )
+                    if len(audio) > 0:
+                        audio_arrays.append(audio)
+                        # Transcript sütununu kontrol et
+                        transcript = item.get('transcript', item.get('transcription', ''))
+                        reference_texts.append(str(transcript).strip())
+                except Exception as e:
+                    print(f"⚠️  Ses dosyası yüklenemedi: {e}")
+                    continue
+            
+            if len(audio_arrays) == 0:
+                return None
+            
+            input_features = self.processor(
+                audio_arrays, 
+                sampling_rate=config.ORNEKLEME_ORANI, 
+                return_tensors="pt", 
+                padding=True
+            ).input_values
+            
+            return {
+                "input_features": input_features, 
+                "reference_texts": reference_texts
+            }
 
-        dataloader = DataLoader(dataset, batch_size=4, collate_fn=collate_fn)
-
+        dataloader = DataLoader(
+            dataset, 
+            batch_size=4, 
+            collate_fn=collate_fn,
+            num_workers=0  # Windows uyumluluğu için
+        )
 
         predictions = []
         references = []
 
-        print(f"🚀 {self.user_id} modeli değerlendiriliyor... (Toplam {len(dataset)} kayıt)")
+        print(f"\n🚀 {self.user_id} modeli değerlendiriliyor...")
+        print(f"   Toplam kayıt: {len(dataset)}")
+        
         self.model.eval()
-        with torch.no_grad():
-            for batch in tqdm(dataloader):
-                input_features = batch["input_features"].to(self.device)
+        processed_count = 0
+        
+        try:
+            with torch.no_grad():
+                for batch in tqdm(dataloader, desc="Değerlendirme"):
+                    if batch is None:
+                        continue
+                    
+                    input_features = batch["input_features"].to(self.device)
 
-                logits = self.model(input_features).logits
-                predicted_ids = torch.argmax(logits, dim=-1)
-                transcription = self.processor.batch_decode(predicted_ids)
+                    logits = self.model(input_features).logits
+                    predicted_ids = torch.argmax(logits, dim=-1)
+                    transcription = self.processor.batch_decode(
+                        predicted_ids, 
+                        skip_special_tokens=True
+                    )
 
-                predictions.extend(transcription)
-                references.extend(batch["reference_texts"])
+                    predictions.extend(transcription)
+                    references.extend(batch["reference_texts"])
+                    processed_count += len(batch["reference_texts"])
+                    
+                    if max_samples and processed_count >= max_samples:
+                        break
 
-        wer = self.wer_metric.compute(predictions=predictions, references=references)
-        cer = self.cer_metric.compute(predictions=predictions, references=references)
+            if len(predictions) == 0:
+                print("❌ Hiç tahmin yapılamadı!")
+                return
 
-        print("\n=========================================")
-        print(f"✅ Değerlendirme Tamamlandı!")
-        print(f"   Word Error Rate (WER): {wer:.4f}")
-        print(f"   Character Error Rate (CER): {cer:.4f}")
-        print("=========================================")
-        print("\n⚠️  Not: Bu değerlendirme eğitim verisi üzerinde yapılmıştır ve modelin gerçek performansını yansıtmayabilir.")
+            # Metrikleri hesapla
+            wer = self.wer_metric.compute(
+                predictions=predictions, 
+                references=references
+            )
+            cer = self.cer_metric.compute(
+                predictions=predictions, 
+                references=references
+            )
 
-        self.provide_suggestions(wer, cer)
+            print("\n" + "="*50)
+            print(f"✅ Değerlendirme Tamamlandı!")
+            print(f"   İşlenen örnek: {len(predictions)}")
+            print(f"   Word Error Rate (WER): {wer:.4f} ({wer*100:.2f}%)")
+            print(f"   Character Error Rate (CER): {cer:.4f} ({cer*100:.2f}%)")
+            print("="*50)
+            
+            # Örnek tahminler göster
+            if len(predictions) > 0:
+                print("\n📝 Örnek Tahminler:")
+                for i in range(min(5, len(predictions))):
+                    print(f"   {i+1}. Gerçek: '{references[i]}'")
+                    print(f"      Tahmin: '{predictions[i]}'")
+                    print()
+
+            self.provide_suggestions(wer, cer)
+            
+        except Exception as e:
+            print(f"\n❌ Değerlendirme sırasında hata: {e}")
+            import traceback
+            traceback.print_exc()
 
     def provide_suggestions(self, wer, cer):
         print("\n💡 Geliştirme Önerileri:")
@@ -112,14 +233,33 @@ class ModelEvaluator:
 import argparse
 
 def main():
-    parser = argparse.ArgumentParser(description="Kişiselleştirilmiş ASR modelini değerlendirir.")
-    parser.add_argument("user_id", type=str, help="Değerlendirilecek kullanıcının kimliği.")
+    parser = argparse.ArgumentParser(
+        description="Kişiselleştirilmiş ASR modelini değerlendirir."
+    )
+    parser.add_argument(
+        "user_id", 
+        type=str, 
+        help="Değerlendirilecek kullanıcının kimliği (örn: Furkan)"
+    )
+    parser.add_argument(
+        "--max_samples",
+        type=int,
+        default=None,
+        help="Maksimum değerlendirilecek örnek sayısı (varsayılan: tümü)"
+    )
+    
     args = parser.parse_args()
 
+    print("="*50)
+    print(f"Model Değerlendirme: {args.user_id}")
+    print("="*50)
+    
     evaluator = ModelEvaluator(user_id=args.user_id)
-    dataset = evaluator.prepare_dataset()
+    dataset = evaluator.prepare_dataset(max_samples=args.max_samples)
     if dataset:
-        evaluator.evaluate_model(dataset)
+        evaluator.evaluate_model(dataset, max_samples=args.max_samples)
+    else:
+        print("❌ Değerlendirme yapılamadı!")
 
 if __name__ == "__main__":
     main()
