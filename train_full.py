@@ -157,4 +157,10 @@ def main():
 
 
 if __name__ == "__main__":
+    # Set multiprocessing start method for CUDA
+    if torch.cuda.is_available():
+        import multiprocess as mp
+        # Using 'spawn' is essential for CUDA to work with multiprocessing
+        mp.set_start_method("spawn", force=True)
+
     main()

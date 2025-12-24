@@ -1,8 +1,8 @@
 evaluate
-transformers==4.41.2
-datasets==2.18.0
-accelerate==0.28.0
-peft==0.10.0
+transformers==4.30.0
+datasets==2.14.0
+accelerate
+peft==0.4.0
 torch
 torchvision
 torchaudio

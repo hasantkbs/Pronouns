@@ -1,76 +1,78 @@
+# train_adapter.py
+
 import os
 import argparse
 import torch
 import pandas as pd
 from pathlib import Path
-import dataclasses
-from typing import List, Dict, Union
 from transformers import (
-    WhisperForConditionalGeneration,
-    WhisperProcessor,
-    TrainingArguments,
-    Trainer,
+    Wav2Vec2ForCTC,
+    Wav2Vec2Processor,
 )
 from peft import LoraConfig, get_peft_model
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from accelerate import Accelerator
 from tqdm import tqdm
+from datasets import Dataset, Audio
+from src.utils.utils import save_model_and_processor
 import config
 import librosa
-import soundfile as sf
-from datasets import Dataset, Audio
-from src.utils.utils import save_model
 
+class DataCollatorCTCWithPadding:
+    def __init__(self, processor):
+        self.processor = processor
 
-@dataclasses.dataclass
-class DataCollatorSpeechSeq2SeqWithPadding:
-    processor: any
-
-    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-        # split inputs and labels since they have to be of different lengths and need
-        # different padding methods
-        input_features = [{"input_features": feature["input_features"]} for feature in features]
+    def __call__(self, features):
+        input_features = [{"input_values": feature["input_values"]} for feature in features]
         label_features = [{"input_ids": feature["labels"]} for feature in features]
 
-        batch = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
+        batch = self.processor.pad(
+            input_features,
+            padding=True,
+            return_tensors="pt",
+        )
+        
+        with self.processor.as_target_processor():
+            labels_batch = self.processor.pad(
+                label_features,
+                padding=True,
+                return_tensors="pt",
+            )
 
-        labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
-
-        # replace padding with -100 to ignore loss correctly
         labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
-
-        # if bos token is appended in previous tokenization step,
-        # cut bos token here as it's append later anyways
-        if (labels[:, 0] == self.processor.tokenizer.bos_token_id).all().cpu().item():
-            labels = labels[:, 1:]
-
         batch["labels"] = labels
-
         return batch
 
-class PersonalizedTrainer:
-    """Kullanıcıya özel model eğitici."""
+def _standalone_preprocess_function(examples, processor):
+    """Standalone data preprocessing function for multiprocessing."""
+    audio_arrays = [librosa.load(path_dict['path'], sr=config.ORNEKLEME_ORANI)[0] for path_dict in examples["file_path"]]
     
+    inputs = processor(audio_arrays, sampling_rate=config.ORNEKLEME_ORANI, return_tensors="pt", padding=True, truncation=True, max_length=96000)
+    
+    with processor.as_target_processor():
+        labels = processor(examples["transcription"], return_tensors="pt", padding=True, truncation=True, max_length=128).input_ids
+
+    inputs["labels"] = labels
+    return inputs
+
+class PersonalizedTrainer:
     def __init__(self, user_id, base_model_path=None):
         self.user_id = user_id
-        self.base_model_path = base_model_path or "openai/whisper-large-v2" # Default Whisper large model
+        self.base_model_path = base_model_path or config.MODEL_NAME
         self.user_data_path = Path(config.BASE_PATH) / self.user_id
         self.output_dir = Path("data/models/personalized_models") / self.user_id
-        self.adapter_name = "user_adapter"
         
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.processor = None
         self.model = None
 
     def run(self):
-        """Kişiselleştirme sürecini başlatır."""
         print(f"🎯 {self.user_id} için kişiselleştirme süreci başlıyor.")
         print("="*50)
         
         if not self.user_data_path.exists() or not (self.user_data_path / "metadata_words.csv").exists():
             print(f"❌ Hata: {self.user_data_path} için veri bulunamadı.")
-            print(f"Lütfen önce 'src/training/collect_user_data.py' scriptini çalıştırın.")
             return
 
         self.load_model_and_processor()
@@ -78,89 +80,57 @@ class PersonalizedTrainer:
         self.train_model(dataset)
 
     def load_model_and_processor(self):
-        """Temel model ve işlemciyi yükler."""
         print(f"📥 Temel model yükleniyor: {self.base_model_path}")
-        self.processor = WhisperProcessor.from_pretrained(self.base_model_path, language="tr", task="transcribe")
-
-        # Performans Optimizasyonu: Mümkünse Flash Attention 2'yi etkinleştir
-        try:
-            self.model = WhisperForConditionalGeneration.from_pretrained(self.base_model_path, attn_implementation="flash_attention_2")
-            print("⚡️ Model, Flash Attention 2 optimizasyonu ile yükleniyor.")
-        except (ImportError, ValueError):
-            print("⚠️ Flash Attention 2 kullanılamıyor. Standart dikkat mekanizması ile devam ediliyor.")
-            self.model = WhisperForConditionalGeneration.from_pretrained(self.base_model_path)
+        self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
+        self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
         
         self.model.to(self.device)
         peft_config = LoraConfig(
             r=config.ADAPTER_REDUCTION_FACTOR,
-            lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2, # A common heuristic
-            target_modules=["q_proj", "v_proj", "k_proj"], # Common target modules for Whisper
-            lora_dropout=0.1, # Example dropout
+            lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2,
+            target_modules=["q_proj", "v_proj"],
+            lora_dropout=0.1,
             bias="none",
         )
         self.model = get_peft_model(self.model, peft_config)
         print(f"✅ Model PEFT/LoRA ile sarmalandı. Cihaz: {self.device}")
 
     def prepare_dataset(self):
-        """Kullanıcıya özel veri setini hazırlar."""
         print(f"📊 Veri seti hazırlanıyor: {self.user_data_path}")
         metadata_path = self.user_data_path / "metadata_words.csv"
         df = pd.read_csv(metadata_path)
 
-        def audio_loader(path):
-            filename = os.path.basename(path)
-            filepath = self.user_data_path / "words" / filename # Use self.user_data_path
-            try:
-                speech, sample_rate = librosa.load(filepath, sr=config.ORNEKLEME_ORANI)
-                return speech
-            except FileNotFoundError:
-                print(f"⚠️  Uyarı: Ses dosyası bulunamadı, atlanıyor: {filepath}")
-                return None
-            except Exception as e:
-                print(f"❌ Hata yüklenirken: {filepath} - {e}")
-                return None
-
-        df["audio"] = df["file_path"].apply(audio_loader)
-        # Remove rows where audio loading failed
-        df = df.dropna(subset=["audio"])
+        df["file_path"] = df["file_path"].apply(
+            lambda x: str(self.user_data_path / "words" / os.path.basename(x))
+        )
         
+        original_size = len(df)
+        df = df[df["file_path"].apply(os.path.exists)]
+        if len(df) < original_size:
+            print(f"⚠️  {original_size - len(df)} adet bulunamayan ses dosyası atlandı.")
+
         dataset = Dataset.from_pandas(df)
+        dataset = dataset.cast_column("file_path", Audio(sampling_rate=config.ORNEKLEME_ORANI, decode=False))
+        
         print(f"📈 Veri seti boyutu: {len(dataset)} kayıt")
         return dataset
 
-    def preprocess_function(self, examples):
-        """Veri ön işleme fonksiyonu."""
-        audio_arrays = [x for x in examples["audio"]]
-        
-        model_inputs = self.processor(audio_arrays, sampling_rate=config.ORNEKLEME_ORANI, return_tensors="pt", padding="max_length", truncation=True)
-        
-        labels = self.processor.tokenizer(text=examples["transcription"], padding=True, truncation=True).input_ids
-        model_inputs["labels"] = labels
-
-        return model_inputs
-
     def train_model(self, dataset):
-        """Modeli, transformers.Trainer kullanmadan manuel bir PyTorch döngüsü ile eğitir."""
         print("🚀 Kişiselleştirilmiş model eğitimi başlıyor... (Manuel Döngü)")
 
-        # 1. Veri Setini Hazırla
-        # Not: num_proc > 1 kullanmak Windows'ta 'fork' metodu nedeniyle sorun yaratabilir. 
-        # Sorun yaşarsanız bu değeri 1'e düşürün veya bu satırı kaldırın.
-        try:
-            num_cpus = os.cpu_count()
-        except NotImplementedError:
-            num_cpus = 1
-        print(f"⚙️  Veri ön işleme {num_cpus} CPU çekirdeği ile paralelleştiriliyor...")
+        num_proc = 4 
+        print(f"⚙️  Veri ön işleme {num_proc} CPU çekirdeği ile paralelleştiriliyor...")
         
         processed_dataset = dataset.map(
-            self.preprocess_function,
+            _standalone_preprocess_function,
+            fn_kwargs={"processor": self.processor},
             remove_columns=dataset.column_names,
             batched=True,
             batch_size=config.FINETUNE_BATCH_SIZE,
-            num_proc=num_cpus
+            num_proc=num_proc
         )
 
-        data_collator = DataCollatorSpeechSeq2SeqWithPadding(processor=self.processor)
+        data_collator = DataCollatorCTCWithPadding(processor=self.processor)
 
         dataloader = DataLoader(
             processed_dataset,
@@ -168,7 +138,6 @@ class PersonalizedTrainer:
             collate_fn=data_collator
         )
 
-        # 2. Optimizasyon ve Hızlandırıcı (Accelerator) Ayarları
         optimizer = AdamW(self.model.parameters(), lr=config.FINETUNE_LEARNING_RATE)
         
         accelerator = Accelerator(
@@ -184,16 +153,13 @@ class PersonalizedTrainer:
         num_training_steps = num_epochs * len(dataloader)
         progress_bar = tqdm(range(num_training_steps))
 
-        # 3. Eğitim Döngüsü
         self.model.train()
         for epoch in range(num_epochs):
             for step, batch in enumerate(dataloader):
                 with accelerator.accumulate(self.model):
-                    # Forward pass
                     outputs = self.model(**batch)
                     loss = outputs.loss
                     
-                    # Backward pass
                     accelerator.backward(loss)
                     
                     optimizer.step()
@@ -202,15 +168,12 @@ class PersonalizedTrainer:
                 progress_bar.update(1)
                 progress_bar.set_description(f"Epoch {epoch+1}/{num_epochs} | Loss: {loss.item():.4f}")
 
-        # 4. Modeli Kaydet
         print("\n✅ Model ince ayarı tamamlandı!")
         
-        # Modeli unwrapping işlemi ve kaydetme
         unwrapped_model = accelerator.unwrap_model(self.model)
-        save_model(unwrapped_model, self.processor, str(self.output_dir))
+        save_model_and_processor(unwrapped_model, self.processor, str(self.output_dir))
 
         print(f"💾 Kişiselleştirilmiş model kaydedildi: {self.output_dir}")
-        print("\nKullanım için app.py veya config.py dosyasını bu yeni model yolunu kullanacak şekilde güncelleyebilirsiniz.")
 
 def main():
     parser = argparse.ArgumentParser(description="Kullanıcıya özel ASR modelini eğitir.")
@@ -223,4 +186,8 @@ def main():
     trainer.run()
 
 if __name__ == "__main__":
+    if torch.cuda.is_available():
+        import multiprocess as mp
+        mp.set_start_method("spawn", force=True)
+
     main()

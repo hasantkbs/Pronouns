@@ -140,3 +140,30 @@ For further accuracy improvements, especially for Turkish, you can integrate a K
 ## 📄 License
 
 This project is licensed under the MIT License.
+
+## ⚠️ Troubleshooting Notes
+
+### `transformers` `ImportError`
+
+During recent development, a persistent `ImportError` for `DataCollatorForSpeechSeq2Seq` was encountered within the `transformers` library, specifically when attempting to run `train_full.py`.
+
+**Troubleshooting Steps Taken:**
+
+1.  **Upgraded `transformers` library:** Attempted `pip install --upgrade transformers`.
+2.  **Verified `transformers` version:** Confirmed version `4.57.3` was installed.
+3.  **Uninstalled and Reinstalled `transformers`:** Performed `pip uninstall transformers` followed by `pip install transformers`.
+4.  **Tested Direct Import:** Attempted `python3 -c "from transformers import DataCollatorForSpeechSeq2Seq"`, which also failed.
+5.  **Modified Import Path:** Changed `from transformers import DataCollatorForSpeechSeq2Seq` to `from transformers.data.data_collator import DataCollatorForSpeechSeq2Seq` in `train_full.py`, which did not resolve the error.
+6.  **Searched Library Files:** Used `grep` to search for `DataCollatorForSpeechSeq2Seq` within the installed `transformers` package directory, which yielded no results.
+7.  **Downgraded `transformers`:** Installed `transformers==4.30.0` (a version known to contain the class) after uninstalling the newer version.
+8.  **Reverted Import Path:** Changed the import path back to the original in `train_full.py` after downgrading.
+
+**Current Status:**
+
+Despite these extensive troubleshooting steps, the `ImportError` persists, indicating a deeper environment-specific issue with the Python installation or package integrity that could not be resolved by automated means. Users encountering this error should consider:
+
+*   Verifying their Python virtual environment.
+*   Creating a fresh virtual environment and reinstalling dependencies.
+*   Manually checking the contents of their `transformers` installation to locate `DataCollatorForSpeechSeq2Seq` or a similar data collator for speech-to-sequence tasks.
+
+---
