@@ -66,8 +66,5 @@ checkpoints/
 runs/
 wandb/
 
-# === Data ===
-*.wav
-
 # === Proje Yönetimi ===
 gelistirme.txtMiniconda3-latest-MacOSX-x86_64.sh
