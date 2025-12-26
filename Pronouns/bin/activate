@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV='/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/Furkan'
+VIRTUAL_ENV='/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/Pronouns'
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
@@ -55,9 +55,9 @@ fi
 
 if [ -z "${VIRTUAL_ENV_DISABLE_PROMPT:-}" ] ; then
     _OLD_VIRTUAL_PS1="${PS1:-}"
-    PS1='(Furkan) '"${PS1:-}"
+    PS1='(Pronouns) '"${PS1:-}"
     export PS1
-    VIRTUAL_ENV_PROMPT='(Furkan) '
+    VIRTUAL_ENV_PROMPT='(Pronouns) '
     export VIRTUAL_ENV_PROMPT
 fi
 
