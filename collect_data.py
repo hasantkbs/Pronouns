@@ -20,34 +20,16 @@ from pathlib import Path
 import argparse
 import torch
 import librosa
-from transformers import WhisperProcessor, WhisperForConditionalGeneration
-from sklearn.metrics.pairwise import cosine_similarity
-from itertools import combinations
+
+
 
 # --- Yapılandırma ---
 TARGET_SAMPLING_RATE = 16000
 BASE_DATA_PATH = "data/users"
 
-# --- Global Model Değişkenleri ---
-model = None
-processor = None
 
-def load_whisper_model():
-    """Whisper modelini ve işlemcisini yükler."""
-    global model, processor
-    if model is None or processor is None:
-        print("\n🔄 Whisper modeli ve işlemcisi yükleniyor...")
-        try:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            processor = WhisperProcessor.from_pretrained("openai/whisper-medium", language="tr", task="transcribe")
-            model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-medium")
-            model.to(device)
-            model.eval() # Değerlendirme modunda çalıştır
-            print(f"✅ Model başarıyla yüklendi. Cihaz: {device}")
-        except Exception as e:
-            print(f"❌ Hata: Whisper modeli yüklenirken bir sorun oluştu: {e}")
-            print("Lütfen internet bağlantınızı ve 'transformers' kütüphanesinin kurulu olduğundan emin olun.")
-            model, processor = None, None # Yükleme başarısız olursa değişkenleri sıfırla
+
+
 
 def select_from_list(items, prompt):
     """Verilen listeden bir öğe seçmek için kullanıcıya bir menü gösterir."""
@@ -99,40 +81,7 @@ def record_audio(duration, samplerate):
     print("⏹️  Kayıt tamamlandı.")
     return recording
 
-def analyze_repetitions(audio_paths):
-    """Kaydedilen tekrarların embedding benzerliğini analiz eder."""
-    if model is None or processor is None or len(audio_paths) < 2:
-        return None
 
-    print("\n🔍 Kayıtlar arası tutarlılık analizi yapılıyor...")
-    device = model.device
-    embeddings = []
-
-    try:
-        for path in audio_paths:
-            speech, sr = librosa.load(path, sr=TARGET_SAMPLING_RATE)
-            input_features = processor(speech, sampling_rate=sr, return_tensors="pt").input_features.to(device)
-            
-            with torch.no_grad():
-                embedding = model.get_encoder()(input_features).last_hidden_state.mean(dim=1)
-            embeddings.append(embedding.cpu().numpy())
-        
-        # Tüm embedding çiftleri arasında kosinüs benzerliğini hesapla
-        if len(embeddings) < 2:
-            return 1.0 # Tek bir öğe varsa, tutarlılık mükemmel kabul edilir
-
-        similarity_scores = []
-        for emb1, emb2 in combinations(embeddings, 2):
-            score = cosine_similarity(emb1, emb2)[0][0]
-            similarity_scores.append(score)
-        
-        avg_similarity = np.mean(similarity_scores)
-        print(f"   -> Ortalama Benzerlik Skoru: {avg_similarity:.2f}")
-        return avg_similarity
-
-    except Exception as e:
-        print(f"❌ Analiz sırasında bir hata oluştu: {e}")
-        return None
 
 def run_recording_session(user_id, items_to_record, save_path, metadata_path, item_type, repetitions=3, re_record=False):
     """Cümle, kelime veya harf kayıt oturumunu yürütür."""
@@ -225,12 +174,7 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
                     "repetition": rep_num
                 })
             
-            # Analiz ve geri bildirim
-            if recorded_files_for_item and (item_type == "kelime" or item_type == "harf"):
-                avg_similarity = analyze_repetitions(recorded_files_for_item)
-                if avg_similarity is not None and avg_similarity < 0.8:
-                    print(f"   ⚠️  Uyarı: Bu kelime/harf için yaptığınız tekrarlar arasında tutarsızlık olabilir (Benzerlik: {avg_similarity:.2f}).")
-                    print("      Daha sonra bu kaydı '--re-record' seçeneği ile tekrar yapmayı düşünebilirsiniz.")
+
 
             if quit_session:
                 print("\nKullanıcı isteğiyle oturum sonlandırılıyor...")
@@ -269,11 +213,7 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
 
 def main():
     """Ana veri toplama menüsü."""
-    # Model ve işlemciyi yükle
-    load_whisper_model()
-    if model is None or processor is None:
-        print("❌ Model yüklenemediği için program sonlandırılıyor.")
-        return
+
 
     parser = argparse.ArgumentParser(description="Birleşik Veri Toplama Aracı")
     parser.add_argument("--re-record", action="store_true", help="datasets/tekrar_kayit.txt dosyasındaki verileri yeniden kaydeder.")
