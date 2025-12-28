@@ -1,169 +1,155 @@
-# Speech Recognition and Personalization System
+# Personalized ASR System for Speech Disorders
 
-This project is an **Automatic Speech Recognition (ASR) system** designed to assist individuals with speech disorders by accurately converting their speech to text. It leverages state-of-the-art `Whisper` models from the Hugging Face `transformers` library and supports **user-specific personalization** for enhanced accuracy.
+## 🎯 About The Project
 
-## ✨ Features
+This project is a personalized Automatic Speech Recognition (ASR) system designed for individuals with speech disorders. It uses a Wav2Vec2-based model, which is fine-tuned with a user's voice recordings to achieve higher accuracy in real-time speech recognition.
 
-*   **Accurate Speech-to-Text:** Utilizes powerful `Whisper` models for high-fidelity speech recognition.
-*   **User-Specific Personalization:** Efficiently fine-tune models for individual users using Parameter-Efficient Fine-Tuning (PEFT), specifically LoRA.
-*   **Flexible Data Collection:** Includes scripts for collecting custom voice data (words, sentences) from users.
-*   **Dynamic Model Loading:** The main application (`app.py`) automatically detects and loads a user's personalized model if available.
-*   **Turkish Language Support:** Optimized for Turkish speech recognition.
-*   **Performance Optimizations for Training:**
-    *   **Parallel Data Preprocessing:** Utilizes multi-core CPUs for faster dataset preparation.
-    *   **Gradient Checkpointing:** Reduces GPU memory consumption during full model fine-tuning.
-    *   **Optional Flash Attention 2:** Significantly accelerates training on compatible CUDA-enabled GPUs.
+The system employs an efficient fine-tuning technique called LoRA (Low-Rank Adaptation) to create a small, personalized adapter for the base model, rather than fully retraining it.
 
-## 🚀 Getting Started
+## 📋 System Requirements
 
-### 1. Prerequisites
+- Python 3.9+
+- CUDA-enabled GPU (Recommended, but CPU is also supported)
+- FFmpeg (for audio processing)
 
-*   **Python 3.9+**
-*   `pip` (Python package installer)
-*   **FFmpeg (System-wide):** Essential for various audio processing tasks. Install it using your system's package manager:
-    *   **Ubuntu/Debian:** `sudo apt update && sudo apt install ffmpeg`
-    *   **macOS (with Homebrew):** `brew install ffmpeg`
-    *   **Windows (with Chocolatey):** `choco install ffmpeg`
-    *   Or download from [FFmpeg Official Website](https://ffmpeg.org/download.html).
+## 🚀 Quick Start
 
-### 2. Installation
+The following steps guide you through preparing data, training a model, and using it for a sample user named `Furkan`.
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/your_username/Pronouns.git
-    cd Pronouns
-    ```
-    *(Replace `https://github.com/your_username/Pronouns.git` with your actual repository URL)*
+### 1. Prepare Data
 
-2.  **Create and activate a Python virtual environment:**
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-    ```
+The system requires user-specific audio recordings and their transcriptions. For this project, sample data for the user "Furkan" is already provided in the `data/users/Furkan/` directory.
 
-3.  **Install project dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **Optional: Install Flash Attention 2 (for compatible CUDA GPUs):**
-    If you are training on a server with a compatible NVIDIA GPU (e.g., A100, H100) and have the necessary CUDA setup, installing `flash-attn` can significantly speed up training.
-    ```bash
-    # Ensure you are in your activated virtual environment
-    pip install flash-attn --no-build-isolation
-    ```
-    *(Note: `flash-attn` may be difficult to install on non-Linux or non-CUDA systems. The code will gracefully fall back if it's not available.)*
-
-### 3. Project Structure Overview
-
-*   `app.py`: The main application to run real-time speech recognition.
-*   `config.py`: Centralized configuration settings for models, data paths, and training.
-*   `scripts/data_management/`: Utility scripts for managing and fixing data.
-*   `train_full.py`: Script for full fine-tuning of a Whisper model (e.g., a base model on a large dataset).
-*   `train_adapter.py`: Script for efficient, user-specific fine-tuning using LoRA (PEFT).
-*   `src/core/`: Contains core ASR and Natural Language Understanding (NLU) logic.
-*   `data/`: Directory for storing user-specific data, personalized models, etc.
-
-## 👨‍💻 Usage
-
-### 1. Collect Personal Data
-
-Use `collect_data.py` to record speech data for a specific user.
+To prepare the data for training, run the following command:
 
 ```bash
-python collect_data.py
-```
-*   You will be prompted to enter a `User ID`.
-*   The script will display sentences/words for you to read. Press `ENTER` to start recording for each prompt.
-*   Recorded audio and metadata will be saved under `data/users/YOUR_USER_ID/`.
-
-#### Re-recording Specific Items
-
-To re-record words/letters the model struggles with, create a `tekrar_kayit.txt` file in the `datasets/` directory (one item per line) and run:
-```bash
-python collect_data.py --re-record
+python prepare_training_data.py Furkan
 ```
 
-#### Audio Quality Analysis
+This script will:
+- Read the main `metadata_words.csv` file.
+- Split the data into training (80%) and evaluation (20%) sets.
+- Create `train.csv` and `eval.csv` in the user's data directory.
 
-The `collect_data.py` script includes real-time audio quality analysis using Whisper embeddings. If the similarity between repetitions of a word is low, it suggests re-recording for better model accuracy.
+### 2. Train the Model
 
-### 2. Personalize Your Model (Efficient Fine-tuning)
-
-Use `train_adapter.py` to fine-tune a Whisper model specifically for a user's voice using LoRA (PEFT). This is highly recommended for user personalization due to its efficiency.
+To train a personalized model for the user, run:
 
 ```bash
-python train_adapter.py YOUR_USER_ID --base_model openai/whisper-small
+python train_adapter.py Furkan
 ```
-*(Replace `YOUR_USER_ID` with the actual ID. You can also specify a different `--base_model`.)*
-The personalized model will be saved to `data/models/personalized_models/YOUR_USER_ID/`.
 
-### 3. Run the Application
+This script performs the following actions:
+- Loads the base Wav2Vec2 model.
+- Fine-tunes it using a LoRA adapter with the user's data.
+- Saves the trained adapter to `data/models/personalized_models/Furkan/`.
 
-Start the main application to use the ASR system.
+**Training Parameters** (configurable in `config.py`):
+- `NUM_FINETUNE_EPOCHS`: 15 (Number of training epochs)
+- `FINETUNE_BATCH_SIZE`: 2 (Batch size for training)
+- `FINETUNE_LEARNING_RATE`: 1e-4 (Learning rate)
+- `ADAPTER_REDUCTION_FACTOR`: 32 (LoRA adapter dimension)
+
+### 3. Evaluate the Model
+
+To evaluate the performance of the fine-tuned model, use:
+
+```bash
+python evaluate_model.py Furkan
+```
+
+*Optional: To evaluate only the first 100 samples:*
+```bash
+python evaluate_model.py Furkan --max_samples 100
+```
+
+This command will:
+- Calculate WER (Word Error Rate) and CER (Character Error Rate) metrics.
+- Display sample predictions.
+- Provide suggestions for improvement.
+
+### 4. Real-time Usage
+
+To use the trained model for real-time speech recognition, run the main application:
 
 ```bash
 python app.py
 ```
-*   Enter your `User ID` when prompted.
-*   The system will automatically detect and load your personalized model if it exists. Otherwise, it will use the default model specified in `config.py`.
 
-### 4. Full Model Fine-tuning (Advanced/Optional)
+The system will prompt you for a User ID. Type `Furkan` and press ENTER. The application will then:
+- Automatically load the personalized model if it exists.
+- Start listening to the microphone.
+- Transcribe your speech to text and display it on the screen.
 
-For training a base Whisper model from scratch on a large dataset or for a full fine-tune (not LoRA), use `train_full.py`. This usually requires significant computational resources.
+**To exit:** Say "çık" or "exit".
 
-```bash
-python train_full.py YOUR_USER_ID --base_model openai/whisper-base
+## 📁 Project Structure
+
 ```
-*(This script includes Gradient Checkpointing for VRAM optimization.)*
+Pronouns/
+├── app.py                          # Main application entry point
+├── config.py                       # Configuration file
+├── prepare_training_data.py        # Data preparation script
+├── train_adapter.py                # Model training script
+├── evaluate_model.py               # Model evaluation script
+├── src/
+│   ├── core/
+│   │   ├── asr.py                  # ASR System (Wav2Vec2)
+│   │   ├── nlu.py                  # Natural Language Understanding
+│   │   └── actions.py              # Action execution
+│   └── utils/
+│       └── utils.py                # Helper functions
+├── data/
+│   ├── users/
+│   │   └── Furkan/
+│   │       ├── metadata_words.csv  # Audio file metadata
+│   │       ├── train.csv           # Training dataset
+│   │       ├── eval.csv            # Evaluation dataset
+│   │       └── words/              # Directory for audio files (.wav)
+│   └── models/
+│       └── personalized_models/
+│           └── Furkan/             # Saved personalized model adapter
+└── requirements.txt                # Python dependencies
+```
 
-## 📈 Performance Considerations
+## ⚙️ Configuration
 
-*   **Parallel Preprocessing:** Data loading and preprocessing steps are parallelized across available CPU cores for speed.
-*   **Gradient Checkpointing:** Enabled in `train_full.py` to optimize GPU memory usage.
-*   **Flash Attention 2:** Automatically attempted in training scripts if `flash-attn` is installed and compatible hardware is present, providing substantial speedups on supported GPUs.
+You can adjust the following settings in `config.py`:
 
-## 🇹🇷 Language Model (Optional)
+```python
+# Model settings
+MODEL_NAME = "mpoyraz/wav2vec2-xls-r-300m-cv7-turkish"
+SAMPLING_RATE = 16000
 
-For further accuracy improvements, especially for Turkish, you can integrate a KenLM language model.
-1.  Download a pre-trained Turkish KenLM model.
-2.  Update the `KENLM_MODEL_PATH` variable in `config.py` to point to your downloaded model.
+# Training settings
+NUM_FINETUNE_EPOCHS = 15
+FINETUNE_BATCH_SIZE = 2
+FINETUNE_LEARNING_RATE = 1e-4
+ADAPTER_REDUCTION_FACTOR = 32
 
-## 🤝 Contributing
+# Audio recording settings
+RECORD_SECONDS = 5
+AUDIO_THRESHOLD = 0.01
+```
 
-1.  Fork the repository
-2.  Create feature branch (`git checkout -b feature/new-feature`)
-3.  Commit changes (`git commit -am 'New feature added'`)
-4.  Push to branch (`git push origin feature/new-feature`)
-5.  Create Pull Request
+## 🐛 Troubleshooting
 
-## 📄 License
+### Model fails to load
+- Check your internet connection (the base model is downloaded on first use).
+- Ensure the trained model exists at `data/models/personalized_models/Furkan/`.
 
-This project is licensed under the MIT License.
+### Errors during training
+- Make sure the audio files are located in `data/users/Furkan/words/`.
+- Verify that `metadata_words.csv` is correctly formatted.
+- Run `prepare_training_data.py` before starting the training.
 
-## ⚠️ Troubleshooting Notes
+### Low accuracy
+- Collect more training data.
+- Increase the number of epochs (`NUM_FINETUNE_EPOCHS` in `config.py`).
+- Adjust the learning rate (`FINETUNE_LEARNING_RATE`).
 
-### `transformers` `ImportError`
+## 📊 Performance Metrics
 
-During recent development, a persistent `ImportError` for `DataCollatorForSpeechSeq2Seq` was encountered within the `transformers` library, specifically when attempting to run `train_full.py`.
-
-**Troubleshooting Steps Taken:**
-
-1.  **Upgraded `transformers` library:** Attempted `pip install --upgrade transformers`.
-2.  **Verified `transformers` version:** Confirmed version `4.57.3` was installed.
-3.  **Uninstalled and Reinstalled `transformers`:** Performed `pip uninstall transformers` followed by `pip install transformers`.
-4.  **Tested Direct Import:** Attempted `python3 -c "from transformers import DataCollatorForSpeechSeq2Seq"`, which also failed.
-5.  **Modified Import Path:** Changed `from transformers import DataCollatorForSpeechSeq2Seq` to `from transformers.data.data_collator import DataCollatorForSpeechSeq2Seq` in `train_full.py`, which did not resolve the error.
-6.  **Searched Library Files:** Used `grep` to search for `DataCollatorForSpeechSeq2Seq` within the installed `transformers` package directory, which yielded no results.
-7.  **Downgraded `transformers`:** Installed `transformers==4.30.0` (a version known to contain the class) after uninstalling the newer version.
-8.  **Reverted Import Path:** Changed the import path back to the original in `train_full.py` after downgrading.
-
-**Current Status:**
-
-Despite these extensive troubleshooting steps, the `ImportError` persists, indicating a deeper environment-specific issue with the Python installation or package integrity that could not be resolved by automated means. Users encountering this error should consider:
-
-*   Verifying their Python virtual environment.
-*   Creating a fresh virtual environment and reinstalling dependencies.
-*   Manually checking the contents of their `transformers` installation to locate `DataCollatorForSpeechSeq2Seq` or a similar data collator for speech-to-sequence tasks.
-
----
+Target metrics for a good model:
+- **WER < 0.15** (Word Error Rate less than 15%)
+- **CER < 0.05** (Character Error Rate less than 5%)
