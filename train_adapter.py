@@ -163,25 +163,36 @@ def _standalone_preprocess_function(examples, processor, augmenter=None):
             "labels": [processor.tokenizer.pad_token_id]
         }
     
-    # Processor ile özellik çıkarımı
-    inputs = processor(
-        audio_arrays, 
-        sampling_rate=config.ORNEKLEME_ORANI, 
-        return_tensors="pt", 
-        padding=True
-    )
+    # Processor ile özellik çıkarımı (her örnek için ayrı ayrı)
+    input_values_list = []
+    label_ids_list = []
     
-    # Transkriptleri tokenize et
-    labels = processor.tokenizer(
-        valid_transcripts, 
-        return_tensors="pt", 
-        padding=True
-    ).input_ids
+    for i, (audio, transcript) in enumerate(zip(audio_arrays, valid_transcripts)):
+        # Her örnek için ayrı ayrı işle
+        inputs = processor(
+            audio, 
+            sampling_rate=config.ORNEKLEME_ORANI, 
+            return_tensors="pt", 
+            padding=False  # Padding yapma, collator yapacak
+        )
+        
+        # Input values'ı list'e çevir
+        input_values_list.append(inputs.input_values[0].tolist())
+        
+        # Transcript'i tokenize et
+        label_ids = processor.tokenizer(transcript).input_ids
+        # Eğer label_ids list değilse list'e çevir
+        if isinstance(label_ids, torch.Tensor):
+            label_ids = label_ids.tolist()
+        # Eğer nested list ise flatten et
+        if isinstance(label_ids[0], list):
+            label_ids = label_ids[0]
+        label_ids_list.append(label_ids)
     
     # Sonuçları dict olarak döndür (collator için)
     result = {
-        "input_values": inputs.input_values,
-        "labels": labels
+        "input_values": input_values_list,
+        "labels": label_ids_list
     }
     
     return result
@@ -534,6 +545,21 @@ class PersonalizedTrainer:
                     with accelerator.accumulate(self.model):
                         outputs = self.model(**batch)
                         loss = outputs.loss
+                        
+                        # Loss kontrolü (negatif veya invalid loss için)
+                        if torch.isnan(loss) or torch.isinf(loss):
+                            print(f"⚠️  Epoch {epoch+1}, Step {step}: Geçersiz loss ({loss.item()}), batch atlanıyor.")
+                            continue
+                        
+                        if loss.item() < 0:
+                            print(f"⚠️  Epoch {epoch+1}, Step {step}: Negatif loss ({loss.item()}), batch atlanıyor.")
+                            # Debug için batch bilgilerini yazdır
+                            if step == 0:
+                                print(f"   Batch keys: {batch.keys()}")
+                                print(f"   Input shape: {batch['input_values'].shape}")
+                                print(f"   Labels shape: {batch['labels'].shape}")
+                                print(f"   Labels sample: {batch['labels'][0][:10]}")
+                            continue
                         
                         accelerator.backward(loss)
                         
