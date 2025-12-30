@@ -166,28 +166,60 @@ def _standalone_preprocess_function(examples, processor, augmenter=None):
     # Processor ile özellik çıkarımı (her örnek için ayrı ayrı)
     input_values_list = []
     label_ids_list = []
+    valid_indices = []
     
     for i, (audio, transcript) in enumerate(zip(audio_arrays, valid_transcripts)):
-        # Her örnek için ayrı ayrı işle
-        inputs = processor(
-            audio, 
-            sampling_rate=config.ORNEKLEME_ORANI, 
-            return_tensors="pt", 
-            padding=False  # Padding yapma, collator yapacak
-        )
-        
-        # Input values'ı list'e çevir
-        input_values_list.append(inputs.input_values[0].tolist())
-        
-        # Transcript'i tokenize et
-        label_ids = processor.tokenizer(transcript).input_ids
-        # Eğer label_ids list değilse list'e çevir
-        if isinstance(label_ids, torch.Tensor):
-            label_ids = label_ids.tolist()
-        # Eğer nested list ise flatten et
-        if isinstance(label_ids[0], list):
-            label_ids = label_ids[0]
-        label_ids_list.append(label_ids)
+        try:
+            # Her örnek için ayrı ayrı işle
+            inputs = processor(
+                audio, 
+                sampling_rate=config.ORNEKLEME_ORANI, 
+                return_tensors="pt", 
+                padding=False  # Padding yapma, collator yapacak
+            )
+            
+            # Input values'ı list'e çevir
+            input_vals = inputs.input_values[0]
+            if isinstance(input_vals, torch.Tensor):
+                input_vals = input_vals.tolist()
+            input_values_list.append(input_vals)
+            
+            # Transcript'i tokenize et
+            # tokenizer() dict döndürür, input_ids'i al
+            tokenized = processor.tokenizer(transcript)
+            label_ids = tokenized.input_ids
+            
+            # Format kontrolü ve düzeltme
+            if isinstance(label_ids, torch.Tensor):
+                label_ids = label_ids.tolist()
+            
+            # Eğer nested list ise ([[1,2,3]] gibi) flatten et
+            if label_ids and isinstance(label_ids[0], list):
+                label_ids = label_ids[0]
+            
+            # Boş label kontrolü
+            if not label_ids or len(label_ids) == 0:
+                print(f"⚠️  Boş label: '{transcript}' -> atlanıyor")
+                continue
+            
+            # Label'ların geçerli token ID'leri içerdiğini kontrol et
+            if any(not isinstance(tid, int) or tid < 0 for tid in label_ids):
+                print(f"⚠️  Geçersiz label IDs: {label_ids[:5]}... -> atlanıyor")
+                continue
+                
+            label_ids_list.append(label_ids)
+            valid_indices.append(i)
+            
+        except Exception as e:
+            print(f"⚠️  Örnek {i} işlenirken hata: {e}")
+            continue
+    
+    # Eğer hiç geçerli örnek yoksa
+    if len(input_values_list) == 0:
+        return {
+            "input_values": [[0.0]],
+            "labels": [[processor.tokenizer.pad_token_id]]
+        }
     
     # Sonuçları dict olarak döndür (collator için)
     result = {
@@ -553,12 +585,21 @@ class PersonalizedTrainer:
                         
                         if loss.item() < 0:
                             print(f"⚠️  Epoch {epoch+1}, Step {step}: Negatif loss ({loss.item()}), batch atlanıyor.")
-                            # Debug için batch bilgilerini yazdır
-                            if step == 0:
-                                print(f"   Batch keys: {batch.keys()}")
-                                print(f"   Input shape: {batch['input_values'].shape}")
-                                print(f"   Labels shape: {batch['labels'].shape}")
-                                print(f"   Labels sample: {batch['labels'][0][:10]}")
+                            # Debug için batch bilgilerini yazdır (sadece ilk batch'te)
+                            if step == 0 and epoch == 0:
+                                print(f"   Debug - Batch keys: {list(batch.keys())}")
+                                print(f"   Debug - Input shape: {batch['input_values'].shape}")
+                                print(f"   Debug - Labels shape: {batch['labels'].shape}")
+                                print(f"   Debug - Labels min/max: {batch['labels'].min().item()}/{batch['labels'].max().item()}")
+                                print(f"   Debug - Labels sample (first 10): {batch['labels'][0][:10].tolist()}")
+                                # İlk birkaç label'ı decode et
+                                try:
+                                    sample_labels = batch['labels'][0].clone()
+                                    sample_labels[sample_labels == -100] = self.processor.tokenizer.pad_token_id
+                                    decoded = self.processor.tokenizer.decode(sample_labels[:20], skip_special_tokens=False)
+                                    print(f"   Debug - Decoded sample: {decoded}")
+                                except Exception as e:
+                                    print(f"   Debug - Decode hatası: {e}")
                             continue
                         
                         accelerator.backward(loss)
