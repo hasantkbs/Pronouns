@@ -247,13 +247,14 @@ class PersonalizedTrainer:
         
         # Konuşma bozukluğu için optimize edilmiş LoRA konfigürasyonu
         # Daha fazla modül ve daha yüksek rank kullanıyoruz
+        # Not: PEFT otomatik olarak Wav2Vec2ForCTC model tipini algılar, task_type gerekmez
         peft_config = LoraConfig(
             r=config.ADAPTER_REDUCTION_FACTOR,
             lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2,
             target_modules=["q_proj", "v_proj", "k_proj", "out_proj"],  # Daha fazla modül
             lora_dropout=0.05,  # Daha düşük dropout (overfitting riski düşük)
             bias="none",
-            task_type="AUTOMATIC_SPEECH_RECOGNITION",
+            # task_type parametresi kaldırıldı - PEFT otomatik algılar
         )
         self.model = get_peft_model(self.model, peft_config)
         
