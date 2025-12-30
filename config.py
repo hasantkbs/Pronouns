@@ -24,12 +24,34 @@ BASE_PATH = "data/users"  # Kullanıcı verilerinin depolanacağı ana dizin
 USER_ID = "default_user"  # Varsayılan kullanıcı ID'si (kullanıcıya özel veriler için)
 
 # --- Model İnce Ayar Ayarları ---
-# Optimum performans için ayarlandı (küçük kişisel veri setleri için)
+# RTX A5000 (24GB VRAM) + 48 CPU çekirdek için optimize edilmiş ayarlar
 FINETUNE_OUTPUT_DIR = "./asr_model_finetuned"  # İnce ayarlı modelin kaydedileceği dizin
-FINETUNE_BATCH_SIZE = 2  # İnce ayar için batch boyutu (küçük veri setleri için 2 veya 4 idealdir)
-NUM_FINETUNE_EPOCHS = 15  # İnce ayar için epoch sayısı (küçük veri setleri için 10-15 arası önerilir)
-FINETUNE_EVAL_STEPS = 500  # Değerlendirme adımları (şu an kullanılmıyor)
-FINETUNE_LOGGING_STEPS = 10  # Loglama sıklığı (küçük veri setinde daha sık loglama faydalıdır)
-FINETUNE_LEARNING_RATE = 1e-4  # İnce ayar için öğrenme oranı (daha stabil öğrenme için)
-ADAPTER_REDUCTION_FACTOR = 32  # Adapter'ın öğrenme kapasitesi. Düşük değer = daha fazla parametre, potansiyel olarak daha yüksek doğruluk.
-GRADIENT_ACCUMULATION_STEPS = 2
+FINETUNE_BATCH_SIZE = 16  # RTX A5000 için optimize edilmiş batch boyutu (24GB VRAM ile 16-32 arası)
+NUM_FINETUNE_EPOCHS = 20  # İnce ayar için epoch sayısı (konuşma bozukluğu için daha fazla epoch gerekebilir)
+FINETUNE_EVAL_STEPS = 50  # Değerlendirme adımları (validation için)
+FINETUNE_LOGGING_STEPS = 10  # Loglama sıklığı
+FINETUNE_LEARNING_RATE = 5e-5  # İnce ayar için öğrenme oranı (konuşma bozukluğu için daha düşük LR daha stabil)
+ADAPTER_REDUCTION_FACTOR = 16  # Adapter'ın öğrenme kapasitesi. Konuşma bozukluğu için daha fazla parametre (16-32 arası)
+GRADIENT_ACCUMULATION_STEPS = 2  # Gradient accumulation (efektif batch size = 16 * 2 = 32, RTX A5000 için optimize)
+WARMUP_STEPS = 100  # Warmup adımları (öğrenme oranını kademeli artırmak için)
+WEIGHT_DECAY = 1e-3  # Weight decay (overfitting'i önlemek için)
+EARLY_STOPPING_PATIENCE = 5  # Early stopping patience (validation loss iyileşmezse dur)
+SAVE_TOTAL_LIMIT = 3  # Maksimum checkpoint sayısı
+USE_AUGMENTATION = True  # Veri augmentation kullan (konuşma bozukluğu için önemli)
+
+# --- Sistem Performans Ayarları (RTX A5000 + 48 CPU için) ---
+DATALOADER_NUM_WORKERS = 8  # DataLoader worker sayısı (48 çekirdek için optimize, her worker ~6 çekirdek)
+DATALOADER_PIN_MEMORY = True  # GPU'ya daha hızlı veri transferi için
+DATALOADER_PREFETCH_FACTOR = 4  # Önceden yükleme faktörü (daha hızlı eğitim için)
+DATA_PREPROCESSING_NUM_PROC = 16  # Veri ön işleme için paralel işlem sayısı (48 çekirdek için optimize)
+MIXED_PRECISION = "fp16"  # RTX A5000 FP16 destekliyor, 2x hız artışı + VRAM tasarrufu
+GRADIENT_CHECKPOINTING = False  # RTX A5000'de yeterli VRAM var, checkpointing gerekmez
+MAX_GRAD_NORM = 1.0  # Gradient clipping norm değeri
+
+# --- Linux Sunucu Ayarları ---
+MULTIPROCESSING_START_METHOD = "fork"  # Linux'ta fork daha hızlı (spawn yerine)
+CUDA_VISIBLE_DEVICES = None  # None = tüm GPU'lar, "0" = sadece GPU 0, "0,1" = GPU 0 ve 1
+LOG_DIR = "logs"  # Log dosyalarının kaydedileceği dizin
+LOG_LEVEL = "INFO"  # Log seviyesi: DEBUG, INFO, WARNING, ERROR
+ENABLE_TENSORBOARD = True  # TensorBoard logging (opsiyonel)
+TENSORBOARD_LOG_DIR = "runs"  # TensorBoard log dizini

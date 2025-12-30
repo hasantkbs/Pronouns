@@ -146,11 +146,15 @@ class ModelEvaluator:
                 "reference_texts": reference_texts
             }
 
+        # RTX A5000 için optimize edilmiş DataLoader
         dataloader = DataLoader(
             dataset, 
-            batch_size=4, 
+            batch_size=16,  # RTX A5000 için artırıldı
             collate_fn=collate_fn,
-            num_workers=0  # Windows uyumluluğu için
+            num_workers=config.DATALOADER_NUM_WORKERS,
+            pin_memory=config.DATALOADER_PIN_MEMORY,
+            prefetch_factor=config.DATALOADER_PREFETCH_FACTOR if config.DATALOADER_NUM_WORKERS > 0 else None,
+            persistent_workers=True if config.DATALOADER_NUM_WORKERS > 0 else False
         )
 
         predictions = []

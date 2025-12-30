@@ -1,10 +1,15 @@
 # train_adapter.py
+# Konuşma bozukluğu için optimize edilmiş model eğitim scripti
 
 import os
+import sys
 import argparse
 import torch
 import pandas as pd
+import numpy as np
 from pathlib import Path
+from datetime import datetime
+import logging
 from transformers import (
     Wav2Vec2ForCTC,
     Wav2Vec2Processor,
@@ -18,6 +23,47 @@ from datasets import Dataset, Audio
 from src.utils.utils import save_model_and_processor
 import config
 import librosa
+import evaluate
+try:
+    import audiomentations as A
+    AUDIOMENTATIONS_AVAILABLE = True
+except ImportError:
+    AUDIOMENTATIONS_AVAILABLE = False
+    print("⚠️  audiomentations bulunamadı. Augmentation kullanılamayacak.")
+
+# Linux sunucu için logging yapılandırması
+def setup_logging(user_id):
+    """Linux sunucu için logging yapılandırması."""
+    log_dir = Path(config.LOG_DIR)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    log_file = log_dir / f"training_{user_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    
+    # Logging formatı
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    date_format = '%Y-%m-%d %H:%M:%S'
+    
+    # Log seviyesi
+    log_level = getattr(logging, config.LOG_LEVEL.upper(), logging.INFO)
+    
+    # File handler
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setLevel(log_level)
+    file_handler.setFormatter(logging.Formatter(log_format, date_format))
+    
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(log_level)
+    console_handler.setFormatter(logging.Formatter(log_format, date_format))
+    
+    # Root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+    
+    print(f"📝 Log dosyası: {log_file}")
+    return log_file
 
 class DataCollatorCTCWithPadding:
     """
@@ -52,13 +98,31 @@ class DataCollatorCTCWithPadding:
         batch["labels"] = labels
         return batch
 
-def _standalone_preprocess_function(examples, processor):
+def build_augment_pipeline(sampling_rate: int):
+    """
+    Konuşma bozukluğu için optimize edilmiş augmentation pipeline.
+    Hafif augmentation kullanır (aşırı distortion'dan kaçınır).
+    """
+    if not AUDIOMENTATIONS_AVAILABLE:
+        return None
+    
+    return A.Compose([
+        # Hafif gürültü ekleme (konuşma bozukluğu için düşük seviye)
+        A.AddGaussianNoise(min_amplitude=0.0005, max_amplitude=0.005, p=0.3),
+        # Zaman esnetme (konuşma hızı varyasyonu)
+        A.TimeStretch(min_rate=0.9, max_rate=1.1, p=0.3, leave_length_unchanged=False),
+        # Pitch değişimi (hafif, konuşma bozukluğu için)
+        A.PitchShift(min_semitones=-2, max_semitones=2, p=0.3),
+        # Zaman maskesi (küçük bölümler)
+        A.TimeMask(min_band_part=0.03, max_band_part=0.1, p=0.2),
+    ], p=0.6)  # %60 ihtimalle augmentation uygula
+
+def _standalone_preprocess_function(examples, processor, augmenter=None):
     """
     Standalone data preprocessing function for multiprocessing.
     Wav2Vec2 için özellik çıkarımı ve tokenization yapar.
+    Augmentation desteği eklenmiştir.
     """
-    import numpy as np
-    
     # Ses dosyalarını yükle
     audio_arrays = []
     valid_transcripts = []
@@ -70,14 +134,26 @@ def _standalone_preprocess_function(examples, processor):
     for i, path_dict in enumerate(examples["file_path"]):
         try:
             audio, sr = librosa.load(path_dict['path'], sr=config.ORNEKLEME_ORANI)
-            if len(audio) > 100:  # En az 100 sample (çok kısa kayıtları filtrele)
-                # Transcript kontrolü
-                transcript = str(transcripts[i]).strip() if i < len(transcripts) else ""
-                if transcript:
-                    audio_arrays.append(audio)
-                    valid_transcripts.append(transcript)
+            
+            # Minimum uzunluk kontrolü (en az 0.1 saniye)
+            if len(audio) < config.ORNEKLEME_ORANI * 0.1:
+                continue
+            
+            # Augmentation uygula (eğer varsa)
+            if augmenter is not None:
+                try:
+                    audio = augmenter(samples=audio, sample_rate=sr)
+                except Exception as e:
+                    # Augmentation hatası durumunda orijinal sesi kullan
+                    pass
+            
+            # Transcript kontrolü
+            transcript = str(transcripts[i]).strip() if i < len(transcripts) else ""
+            if transcript:
+                audio_arrays.append(audio)
+                valid_transcripts.append(transcript)
         except Exception as e:
-            # Hata durumunda sessizce atla (loglama çok fazla olabilir)
+            # Hata durumunda sessizce atla
             continue
     
     if len(audio_arrays) == 0:
@@ -120,59 +196,119 @@ class PersonalizedTrainer:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.processor = None
         self.model = None
+        self.wer_metric = evaluate.load("wer")
+        self.cer_metric = evaluate.load("cer")
+        self.best_val_loss = float('inf')
+        self.patience_counter = 0
+        self.checkpoint_dir = self.output_dir / "checkpoints"
 
     def run(self):
+        # Linux sunucu için logging başlat
+        log_file = setup_logging(self.user_id)
+        logger = logging.getLogger(__name__)
+        
         print(f"🎯 {self.user_id} için kişiselleştirme süreci başlıyor.")
         print("="*50)
+        logger.info(f"Training started for user: {self.user_id}")
+        
+        # Sistem bilgileri
+        import platform
+        logger.info(f"Platform: {platform.system()} {platform.release()}")
+        logger.info(f"Python: {sys.version}")
+        if torch.cuda.is_available():
+            logger.info(f"CUDA Version: {torch.version.cuda}")
+            logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
+            logger.info(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
         
         if not self.user_data_path.exists() or not (self.user_data_path / "metadata_words.csv").exists():
-            print(f"❌ Hata: {self.user_data_path} için veri bulunamadı.")
+            error_msg = f"❌ Hata: {self.user_data_path} için veri bulunamadı."
+            print(error_msg)
+            logger.error(error_msg)
             return
 
         self.load_model_and_processor()
-        dataset = self.prepare_dataset()
-        self.train_model(dataset)
+        train_dataset = self.prepare_dataset(split='train')
+        eval_dataset = self.prepare_dataset(split='eval')
+        self.train_model(train_dataset, eval_dataset)
+        
+        logger.info(f"Training completed for user: {self.user_id}")
 
     def load_model_and_processor(self):
         print(f"📥 Temel model yükleniyor: {self.base_model_path}")
         self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
         self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
         
+        # Gradient checkpointing (opsiyonel, VRAM tasarrufu için)
+        if config.GRADIENT_CHECKPOINTING and hasattr(self.model, 'gradient_checkpointing_enable'):
+            self.model.gradient_checkpointing_enable()
+            print("   ✅ Gradient checkpointing aktif (VRAM tasarrufu)")
+        
         self.model.to(self.device)
+        
+        # Konuşma bozukluğu için optimize edilmiş LoRA konfigürasyonu
+        # Daha fazla modül ve daha yüksek rank kullanıyoruz
         peft_config = LoraConfig(
             r=config.ADAPTER_REDUCTION_FACTOR,
             lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2,
-            target_modules=["q_proj", "v_proj"],
-            lora_dropout=0.1,
+            target_modules=["q_proj", "v_proj", "k_proj", "out_proj"],  # Daha fazla modül
+            lora_dropout=0.05,  # Daha düşük dropout (overfitting riski düşük)
             bias="none",
+            task_type="AUTOMATIC_SPEECH_RECOGNITION",
         )
         self.model = get_peft_model(self.model, peft_config)
+        
+        # Trainable parametreleri göster
+        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        total_params = sum(p.numel() for p in self.model.parameters())
         print(f"✅ Model PEFT/LoRA ile sarmalandı. Cihaz: {self.device}")
+        print(f"   Eğitilebilir parametreler: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
 
-    def prepare_dataset(self):
-        """Veri setini hazırlar ve yükler."""
-        print(f"📊 Veri seti hazırlanıyor: {self.user_data_path}")
+    def prepare_dataset(self, split='train'):
+        """
+        Veri setini hazırlar ve yükler.
         
-        # Önce train.csv ve eval.csv dosyalarını kontrol et
-        train_csv = self.user_data_path / "train.csv"
-        eval_csv = self.user_data_path / "eval.csv"
+        Args:
+            split: 'train' veya 'eval'
+        """
+        print(f"📊 {split.upper()} veri seti hazırlanıyor: {self.user_data_path}")
         
-        if train_csv.exists():
-            print(f"   ✅ train.csv bulundu, kullanılıyor.")
-            df = pd.read_csv(train_csv, encoding='utf-8')
-        else:
-            # metadata_words.csv'den oluştur
-            metadata_path = self.user_data_path / "metadata_words.csv"
-            if not metadata_path.exists():
-                raise FileNotFoundError(
-                    f"❌ Hata: Ne train.csv ne de metadata_words.csv bulunamadı!\n"
-                    f"   Lütfen önce 'python prepare_training_data.py {self.user_id}' çalıştırın."
-                )
-            
-            print(f"   ⚠️  train.csv bulunamadı, metadata_words.csv kullanılıyor.")
-            df = pd.read_csv(metadata_path, encoding='utf-8')
-            df = df[['file_path', 'transcription']].copy()
-            df.rename(columns={'transcription': 'transcript'}, inplace=True)
+        # Split'e göre dosya seç
+        if split == 'train':
+            train_csv = self.user_data_path / "train.csv"
+            if train_csv.exists():
+                print(f"   ✅ train.csv bulundu, kullanılıyor.")
+                df = pd.read_csv(train_csv, encoding='utf-8')
+            else:
+                # metadata_words.csv'den oluştur
+                metadata_path = self.user_data_path / "metadata_words.csv"
+                if not metadata_path.exists():
+                    raise FileNotFoundError(
+                        f"❌ Hata: Ne train.csv ne de metadata_words.csv bulunamadı!\n"
+                        f"   Lütfen önce 'python prepare_training_data.py {self.user_id}' çalıştırın."
+                    )
+                
+                print(f"   ⚠️  train.csv bulunamadı, metadata_words.csv kullanılıyor.")
+                df = pd.read_csv(metadata_path, encoding='utf-8')
+                df = df[['file_path', 'transcription']].copy()
+                df.rename(columns={'transcription': 'transcript'}, inplace=True)
+        else:  # eval
+            eval_csv = self.user_data_path / "eval.csv"
+            if eval_csv.exists():
+                print(f"   ✅ eval.csv bulundu, kullanılıyor.")
+                df = pd.read_csv(eval_csv, encoding='utf-8')
+            else:
+                # metadata_words.csv'den oluştur (validation için)
+                metadata_path = self.user_data_path / "metadata_words.csv"
+                if not metadata_path.exists():
+                    print(f"   ⚠️  eval.csv bulunamadı, validation seti oluşturulamıyor.")
+                    return None
+                
+                print(f"   ⚠️  eval.csv bulunamadı, metadata_words.csv'nin %20'si validation için kullanılıyor.")
+                df = pd.read_csv(metadata_path, encoding='utf-8')
+                df = df[['file_path', 'transcription']].copy()
+                df.rename(columns={'transcription': 'transcript'}, inplace=True)
+                # Son %20'yi validation için al
+                df = df.tail(int(len(df) * 0.2))
 
         # Dosya yollarını düzelt
         words_dir = self.user_data_path / "words"
@@ -189,6 +325,8 @@ class PersonalizedTrainer:
             print(f"   ⚠️  {original_size - len(df)} adet bulunamayan ses dosyası atlandı.")
         
         if len(df) == 0:
+            if split == 'eval':
+                return None
             raise ValueError(f"❌ Hata: Hiç geçerli ses dosyası bulunamadı!")
         
         # Boş transkriptleri filtrele
@@ -197,40 +335,108 @@ class PersonalizedTrainer:
         dataset = Dataset.from_pandas(df)
         dataset = dataset.cast_column("file_path", Audio(sampling_rate=config.ORNEKLEME_ORANI, decode=False))
         
-        print(f"   📈 Veri seti boyutu: {len(dataset)} kayıt")
+        print(f"   📈 {split.upper()} veri seti boyutu: {len(dataset)} kayıt")
         return dataset
 
-    def train_model(self, dataset):
+    def evaluate_model(self, eval_dataloader, accelerator):
+        """Validation setinde modeli değerlendirir."""
+        self.model.eval()
+        total_loss = 0.0
+        all_predictions = []
+        all_references = []
+        num_batches = 0
+        
+        with torch.no_grad():
+            for batch in eval_dataloader:
+                outputs = self.model(**batch)
+                loss = outputs.loss
+                total_loss += loss.item()
+                num_batches += 1
+                
+                # WER/CER hesaplama için tahminler
+                logits = outputs.logits
+                predicted_ids = torch.argmax(logits, dim=-1)
+                predictions = self.processor.batch_decode(predicted_ids, skip_special_tokens=True)
+                
+                # Referans metinleri
+                label_ids = batch["labels"]
+                label_ids[label_ids == -100] = self.processor.tokenizer.pad_token_id
+                references = self.processor.batch_decode(label_ids, skip_special_tokens=True)
+                
+                all_predictions.extend(predictions)
+                all_references.extend(references)
+        
+        avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
+        
+        # WER ve CER hesapla
+        wer = self.wer_metric.compute(predictions=all_predictions, references=all_references)
+        cer = self.cer_metric.compute(predictions=all_predictions, references=all_references)
+        
+        self.model.train()
+        return avg_loss, wer, cer
+
+    def train_model(self, train_dataset, eval_dataset=None):
         """Model eğitimini başlatır."""
         print("🚀 Kişiselleştirilmiş model eğitimi başlıyor...")
         print(f"   Epoch sayısı: {config.NUM_FINETUNE_EPOCHS}")
         print(f"   Batch size: {config.FINETUNE_BATCH_SIZE}")
         print(f"   Learning rate: {config.FINETUNE_LEARNING_RATE}")
         print(f"   Gradient accumulation: {config.GRADIENT_ACCUMULATION_STEPS}")
+        print(f"   Augmentation: {'Aktif' if config.USE_AUGMENTATION and AUDIOMENTATIONS_AVAILABLE else 'Pasif'}")
+        print(f"   Validation: {'Aktif' if eval_dataset is not None else 'Pasif'}")
 
-        # Veri ön işleme
-        num_proc = min(4, os.cpu_count() or 1)
+        # Augmentation pipeline oluştur
+        augmenter = None
+        if config.USE_AUGMENTATION and AUDIOMENTATIONS_AVAILABLE:
+            augmenter = build_augment_pipeline(config.ORNEKLEME_ORANI)
+
+        # Veri ön işleme (sistem kaynaklarına göre optimize)
+        num_proc = min(config.DATA_PREPROCESSING_NUM_PROC, os.cpu_count() or 1)
         print(f"\n⚙️  Veri ön işleme {num_proc} CPU çekirdeği ile paralelleştiriliyor...")
         
         try:
-            processed_dataset = dataset.map(
+            # Training set preprocessing (with augmentation)
+            processed_train_dataset = train_dataset.map(
                 _standalone_preprocess_function,
-                fn_kwargs={"processor": self.processor},
-                remove_columns=dataset.column_names,
+                fn_kwargs={"processor": self.processor, "augmenter": augmenter},
+                remove_columns=train_dataset.column_names,
                 batched=True,
                 batch_size=config.FINETUNE_BATCH_SIZE,
                 num_proc=num_proc
             )
             
             # Boş örnekleri filtrele
-            processed_dataset = processed_dataset.filter(
+            processed_train_dataset = processed_train_dataset.filter(
                 lambda x: len(x.get("input_values", [])) > 0 and len(x.get("labels", [])) > 0
             )
             
-            if len(processed_dataset) == 0:
+            if len(processed_train_dataset) == 0:
                 raise ValueError("❌ Hata: Ön işleme sonrası hiç geçerli örnek kalmadı!")
             
-            print(f"   ✅ Ön işleme tamamlandı. {len(processed_dataset)} geçerli örnek.")
+            print(f"   ✅ Training set ön işleme tamamlandı. {len(processed_train_dataset)} geçerli örnek.")
+            
+            # Validation set preprocessing (no augmentation)
+            processed_eval_dataset = None
+            eval_dataloader = None
+            if eval_dataset is not None:
+                processed_eval_dataset = eval_dataset.map(
+                    _standalone_preprocess_function,
+                    fn_kwargs={"processor": self.processor, "augmenter": None},
+                    remove_columns=eval_dataset.column_names,
+                    batched=True,
+                    batch_size=config.FINETUNE_BATCH_SIZE,
+                    num_proc=num_proc
+                )
+                
+                processed_eval_dataset = processed_eval_dataset.filter(
+                    lambda x: len(x.get("input_values", [])) > 0 and len(x.get("labels", [])) > 0
+                )
+                
+                if len(processed_eval_dataset) > 0:
+                    print(f"   ✅ Validation set ön işleme tamamlandı. {len(processed_eval_dataset)} geçerli örnek.")
+                else:
+                    print(f"   ⚠️  Validation seti boş, validation atlanacak.")
+                    processed_eval_dataset = None
             
         except Exception as e:
             print(f"❌ Veri ön işleme hatası: {e}")
@@ -241,74 +447,169 @@ class PersonalizedTrainer:
         # Data collator ve dataloader
         data_collator = DataCollatorCTCWithPadding(processor=self.processor)
 
-        dataloader = DataLoader(
-            processed_dataset,
+        # RTX A5000 için optimize edilmiş DataLoader ayarları
+        train_dataloader = DataLoader(
+            processed_train_dataset,
             batch_size=config.FINETUNE_BATCH_SIZE,
             collate_fn=data_collator,
-            shuffle=True
+            shuffle=True,
+            num_workers=config.DATALOADER_NUM_WORKERS,
+            pin_memory=config.DATALOADER_PIN_MEMORY,
+            prefetch_factor=config.DATALOADER_PREFETCH_FACTOR if config.DATALOADER_NUM_WORKERS > 0 else None,
+            persistent_workers=True if config.DATALOADER_NUM_WORKERS > 0 else False
         )
+        
+        if processed_eval_dataset is not None:
+            eval_dataloader = DataLoader(
+                processed_eval_dataset,
+                batch_size=config.FINETUNE_BATCH_SIZE,
+                collate_fn=data_collator,
+                shuffle=False,
+                num_workers=config.DATALOADER_NUM_WORKERS,
+                pin_memory=config.DATALOADER_PIN_MEMORY,
+                prefetch_factor=config.DATALOADER_PREFETCH_FACTOR if config.DATALOADER_NUM_WORKERS > 0 else None,
+                persistent_workers=True if config.DATALOADER_NUM_WORKERS > 0 else False
+            )
 
-        # Optimizer
+        # Optimizer with warmup
         optimizer = AdamW(
             self.model.parameters(), 
             lr=config.FINETUNE_LEARNING_RATE,
-            weight_decay=5e-3
+            weight_decay=config.WEIGHT_DECAY
         )
         
-        # Accelerator (GPU desteği ve gradient accumulation için)
+        # Learning rate scheduler (linear warmup)
+        num_training_steps = config.NUM_FINETUNE_EPOCHS * len(train_dataloader)
+        warmup_steps = config.WARMUP_STEPS
+        from transformers import get_linear_schedule_with_warmup
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=num_training_steps
+        )
+        
+        # Accelerator (RTX A5000 için optimize edilmiş ayarlar)
+        mixed_precision_mode = config.MIXED_PRECISION if torch.cuda.is_available() else "no"
+        if mixed_precision_mode == "fp16" and not torch.cuda.is_available():
+            print("⚠️  FP16 seçildi ancak CUDA yok, mixed precision kapatılıyor.")
+            mixed_precision_mode = "no"
+        
         accelerator = Accelerator(
-            mixed_precision="fp16" if torch.cuda.is_available() else "no",
+            mixed_precision=mixed_precision_mode,
             gradient_accumulation_steps=config.GRADIENT_ACCUMULATION_STEPS
         )
         
-        self.model, optimizer, dataloader = accelerator.prepare(
-            self.model, optimizer, dataloader
+        if torch.cuda.is_available():
+            print(f"✅ GPU kullanılıyor: {torch.cuda.get_device_name(0)}")
+            print(f"   VRAM: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+            print(f"   Mixed Precision: {mixed_precision_mode}")
+            print(f"   Batch Size: {config.FINETUNE_BATCH_SIZE}")
+            print(f"   Gradient Accumulation: {config.GRADIENT_ACCUMULATION_STEPS}")
+            print(f"   Effective Batch Size: {config.FINETUNE_BATCH_SIZE * config.GRADIENT_ACCUMULATION_STEPS}")
+        else:
+            print("⚠️  CUDA yok, CPU kullanılıyor.")
+        
+        self.model, optimizer, train_dataloader, scheduler = accelerator.prepare(
+            self.model, optimizer, train_dataloader, scheduler
         )
+        
+        if eval_dataloader is not None:
+            eval_dataloader = accelerator.prepare(eval_dataloader)
 
         # Eğitim döngüsü
         num_epochs = config.NUM_FINETUNE_EPOCHS
-        num_training_steps = num_epochs * len(dataloader)
         progress_bar = tqdm(range(num_training_steps), desc="Eğitim")
-
-        self.model.train()
-        total_loss = 0.0
+        
+        self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         
         try:
+            global_step = 0
             for epoch in range(num_epochs):
                 epoch_loss = 0.0
                 num_batches = 0
                 
-                for step, batch in enumerate(dataloader):
+                self.model.train()
+                for step, batch in enumerate(train_dataloader):
                     with accelerator.accumulate(self.model):
                         outputs = self.model(**batch)
                         loss = outputs.loss
                         
                         accelerator.backward(loss)
+                        
+                        # Gradient clipping (stabilite için)
+                        if accelerator.sync_gradients:
+                            accelerator.clip_grad_norm_(self.model.parameters(), max_norm=config.MAX_GRAD_NORM)
+                        
                         optimizer.step()
+                        scheduler.step()
                         optimizer.zero_grad()
                     
                     epoch_loss += loss.item()
                     num_batches += 1
-                    total_loss += loss.item()
+                    global_step += 1
                     
                     progress_bar.update(1)
                     avg_loss = epoch_loss / num_batches
+                    current_lr = optimizer.param_groups[0]['lr']
                     progress_bar.set_description(
-                        f"Epoch {epoch+1}/{num_epochs} | Loss: {avg_loss:.4f}"
+                        f"Epoch {epoch+1}/{num_epochs} | Loss: {avg_loss:.4f} | LR: {current_lr:.2e}"
                     )
+                    
+                    # Validation (belirli adımlarda)
+                    if eval_dataloader is not None and global_step % config.FINETUNE_EVAL_STEPS == 0:
+                        val_loss, wer, cer = self.evaluate_model(eval_dataloader, accelerator)
+                        print(f"\n   📊 Validation (Step {global_step}):")
+                        print(f"      Loss: {val_loss:.4f} | WER: {wer:.4f} ({wer*100:.2f}%) | CER: {cer:.4f} ({cer*100:.2f}%)")
+                        
+                        # Early stopping kontrolü
+                        if val_loss < self.best_val_loss:
+                            self.best_val_loss = val_loss
+                            self.patience_counter = 0
+                            # Best model'i kaydet
+                            unwrapped_model = accelerator.unwrap_model(self.model)
+                            best_checkpoint = self.checkpoint_dir / "best_model"
+                            save_model_and_processor(unwrapped_model, self.processor, str(best_checkpoint))
+                            print(f"      ✅ Yeni en iyi model kaydedildi! (Loss: {val_loss:.4f})")
+                        else:
+                            self.patience_counter += 1
+                            if self.patience_counter >= config.EARLY_STOPPING_PATIENCE:
+                                print(f"\n   ⏹️  Early stopping tetiklendi! (Patience: {config.EARLY_STOPPING_PATIENCE})")
+                                print(f"      En iyi validation loss: {self.best_val_loss:.4f}")
+                                break
                 
-                print(f"\n   Epoch {epoch+1}/{num_epochs} tamamlandı. Ortalama Loss: {epoch_loss/num_batches:.4f}")
+                avg_epoch_loss = epoch_loss / num_batches if num_batches > 0 else 0.0
+                print(f"\n   Epoch {epoch+1}/{num_epochs} tamamlandı. Ortalama Loss: {avg_epoch_loss:.4f}")
+                
+                # Epoch sonunda validation
+                if eval_dataloader is not None:
+                    val_loss, wer, cer = self.evaluate_model(eval_dataloader, accelerator)
+                    print(f"   📊 Epoch sonu Validation:")
+                    print(f"      Loss: {val_loss:.4f} | WER: {wer:.4f} ({wer*100:.2f}%) | CER: {cer:.4f} ({cer*100:.2f}%)")
+                
+                # Early stopping kontrolü
+                if self.patience_counter >= config.EARLY_STOPPING_PATIENCE:
+                    break
 
             print("\n✅ Model ince ayarı tamamlandı!")
             
-            # Model kaydetme
-            unwrapped_model = accelerator.unwrap_model(self.model)
+            # En iyi modeli yükle ve kaydet
+            if (self.checkpoint_dir / "best_model").exists():
+                print(f"   📥 En iyi model yükleniyor...")
+                from peft import PeftModel
+                base_model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
+                best_model = PeftModel.from_pretrained(base_model, str(self.checkpoint_dir / "best_model"))
+                unwrapped_model = accelerator.unwrap_model(best_model)
+            else:
+                unwrapped_model = accelerator.unwrap_model(self.model)
+            
             self.output_dir.mkdir(parents=True, exist_ok=True)
             save_model_and_processor(unwrapped_model, self.processor, str(self.output_dir))
 
             print(f"💾 Kişiselleştirilmiş model kaydedildi: {self.output_dir}")
-            print(f"   Toplam eğitim adımı: {num_training_steps}")
-            print(f"   Ortalama loss: {total_loss / num_training_steps:.4f}")
+            print(f"   Toplam eğitim adımı: {global_step}")
+            if eval_dataloader is not None:
+                final_val_loss, final_wer, final_cer = self.evaluate_model(eval_dataloader, accelerator)
+                print(f"   Final Validation - Loss: {final_val_loss:.4f} | WER: {final_wer:.4f} ({final_wer*100:.2f}%) | CER: {final_cer:.4f} ({final_cer*100:.2f}%)")
             
         except Exception as e:
             print(f"\n❌ Eğitim sırasında hata oluştu: {e}")
@@ -327,8 +628,31 @@ def main():
     trainer.run()
 
 if __name__ == "__main__":
-    if torch.cuda.is_available():
-        import multiprocess as mp
-        mp.set_start_method("spawn", force=True)
+    import platform
+    import sys
+    
+    # Linux sunucu için multiprocessing optimizasyonu
+    if platform.system() == "Linux":
+        import multiprocessing as mp
+        try:
+            # Linux'ta fork daha hızlı ve verimli
+            mp.set_start_method(config.MULTIPROCESSING_START_METHOD, force=True)
+            print(f"✅ Linux sunucu: Multiprocessing start method = {config.MULTIPROCESSING_START_METHOD}")
+        except RuntimeError:
+            # Zaten ayarlanmışsa devam et
+            pass
+    else:
+        # Windows/Mac için spawn
+        if torch.cuda.is_available():
+            try:
+                import multiprocessing as mp
+                mp.set_start_method("spawn", force=True)
+            except RuntimeError:
+                pass
+    
+    # CUDA device seçimi (Linux sunucuda birden fazla GPU varsa)
+    if torch.cuda.is_available() and config.CUDA_VISIBLE_DEVICES is not None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(config.CUDA_VISIBLE_DEVICES)
+        print(f"✅ CUDA_VISIBLE_DEVICES = {config.CUDA_VISIBLE_DEVICES}")
 
     main()

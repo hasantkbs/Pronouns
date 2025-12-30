@@ -1,0 +1,23 @@
+[Unit]
+Description=ASR Model Training Service
+After=network.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/path/to/Pronouns
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+Environment="CUDA_VISIBLE_DEVICES=0"
+ExecStart=/usr/bin/python3 /path/to/Pronouns/train_adapter.py Furkan
+StandardOutput=append:/path/to/Pronouns/logs/training_service.log
+StandardError=append:/path/to/Pronouns/logs/training_service_error.log
+Restart=on-failure
+RestartSec=10
+
+# Resource limits (48 çekirdek için optimize)
+CPUQuota=4000%
+MemoryLimit=64G
+
+[Install]
+WantedBy=multi-user.target
+
