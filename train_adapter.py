@@ -108,14 +108,14 @@ def build_augment_pipeline(sampling_rate: int):
     
     return A.Compose([
         # Hafif gürültü ekleme (konuşma bozukluğu için düşük seviye)
-        A.AddGaussianNoise(min_amplitude=0.0005, max_amplitude=0.005, p=0.3),
+        A.AddGaussianNoise(min_amplitude=config.AUG_NOISE_MIN, max_amplitude=config.AUG_NOISE_MAX, p=config.AUG_NOISE_PROB),
         # Zaman esnetme (konuşma hızı varyasyonu)
-        A.TimeStretch(min_rate=0.9, max_rate=1.1, p=0.3, leave_length_unchanged=False),
+        A.TimeStretch(min_rate=config.AUG_TIME_STRETCH_MIN, max_rate=config.AUG_TIME_STRETCH_MAX, p=config.AUG_TIME_STRETCH_PROB, leave_length_unchanged=False),
         # Pitch değişimi (hafif, konuşma bozukluğu için)
-        A.PitchShift(min_semitones=-2, max_semitones=2, p=0.3),
+        A.PitchShift(min_semitones=config.AUG_PITCH_SHIFT_MIN, max_semitones=config.AUG_PITCH_SHIFT_MAX, p=config.AUG_PITCH_SHIFT_PROB),
         # Zaman maskesi (küçük bölümler)
-        A.TimeMask(min_band_part=0.03, max_band_part=0.1, p=0.2),
-    ], p=0.6)  # %60 ihtimalle augmentation uygula
+        A.TimeMask(min_band_part=0.03, max_band_part=0.1, p=config.AUG_TIME_MASK_PROB),
+    ], p=config.AUGMENTATION_PROB)  # %40 ihtimalle augmentation uygula
 
 def _standalone_preprocess_function(examples, processor, augmenter=None):
     """
@@ -279,7 +279,11 @@ class PersonalizedTrainer:
     def load_model_and_processor(self):
         print(f"📥 Temel model yükleniyor: {self.base_model_path}")
         self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
-        self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
+        self.model = Wav2Vec2ForCTC.from_pretrained(
+            self.base_model_path,
+            attention_dropout=config.ATTENTION_DROPOUT,
+            hidden_dropout=config.HIDDEN_DROPOUT,
+        )
         
         # Gradient checkpointing (opsiyonel, VRAM tasarrufu için)
         if config.GRADIENT_CHECKPOINTING and hasattr(self.model, 'gradient_checkpointing_enable'):
@@ -295,7 +299,7 @@ class PersonalizedTrainer:
             r=config.ADAPTER_REDUCTION_FACTOR,
             lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2,
             target_modules=["q_proj", "v_proj", "k_proj", "out_proj"],  # Daha fazla modül
-            lora_dropout=0.05,  # Daha düşük dropout (overfitting riski düşük)
+            lora_dropout=config.LORA_DROPOUT,  # Daha düşük dropout (overfitting riski düşük)
             bias="none",
             # task_type parametresi kaldırıldı - PEFT otomatik algılar
         )
