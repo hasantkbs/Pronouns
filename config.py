@@ -9,32 +9,31 @@ MODEL_NAME = "your_base_model_path"  # Base Wav2Vec2 model
 ORNEKLEME_ORANI = 16000  # Sampling rate
 
 # ============================================================================
-# TRAINING HYPERPARAMETERS (OPTIMIZED FOR SPEECH DISORDERS)
+# TRAINING HYPERPARAMETERS (FROM TRAINING_GUIDE.MD)
 # ============================================================================
 
-# CRITICAL: Reduced LoRA rank to prevent overfitting
-ADAPTER_REDUCTION_FACTOR = 8  # Changed from 16 to 8 (fewer trainable params)
+ADAPTER_REDUCTION_FACTOR = 16
 
-# Learning rate - significantly reduced
-FINETUNE_LEARNING_RATE = 5e-6  # Changed from likely 1e-4 to 5e-6
+# Learning rate
+FINETUNE_LEARNING_RATE = 5e-5
 
 # Batch size
-FINETUNE_BATCH_SIZE = 4  # Keep small for stability
+FINETUNE_BATCH_SIZE = 4
 
-# Epochs - reduced to prevent overfitting
-NUM_FINETUNE_EPOCHS = 10  # Changed from 20 to 10
+# Epochs
+NUM_FINETUNE_EPOCHS = 20
 
 # Gradient accumulation
-GRADIENT_ACCUMULATION_STEPS = 8  # Effective batch size = 32
+GRADIENT_ACCUMULATION_STEPS = 4  # Effective batch size = 16
 
-# Weight decay - increased for regularization
-WEIGHT_DECAY = 0.1  # Changed from 0.01 to 0.1
+# Weight decay
+WEIGHT_DECAY = 0.01  # Reverted to pre-optimized value
 
 # Gradient clipping
-MAX_GRAD_NORM = 0.5  # Changed from 1.0 to 0.5 (more aggressive)
+MAX_GRAD_NORM = 1.0  # Reverted to pre-optimized value
 
 # Warmup steps
-WARMUP_STEPS = 200  # Increased for smoother training
+WARMUP_STEPS = 100  # From guide
 
 # ============================================================================
 # VALIDATION & EARLY STOPPING
@@ -97,3 +96,9 @@ CUDA_VISIBLE_DEVICES = "0"  # GPU selection
 BASE_PATH = "data/users"
 LOG_DIR = "logs"
 LOG_LEVEL = "INFO"
+
+# ============================================================================
+# RECORDING
+# ============================================================================
+GECICI_DOSYA_YOLU = "temp_audio.wav"
+KAYIT_SURESI_SN = 5

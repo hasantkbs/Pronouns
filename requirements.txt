@@ -2,12 +2,13 @@ accelerate
 audiomentations
 datasets==2.13.1
 evaluate
-kenlm==0.2.0
+kenlm
 librosa
 matplotlib
 numpy
 pandas
 peft==0.3.0
+pyarrow==12.0.1
 pyaudio
 pyctcdecode
 pydub
@@ -22,4 +23,5 @@ torchaudio
 torchvision
 tqdm
 transformers==4.29.2
-tokenizers==0.12.1
+tokenizers
+jiwer
