@@ -1,8 +1,8 @@
 ---
-base_model: mpoyraz/wav2vec2-xls-r-300m-cv7-turkish
+base_model: openai/whisper-large-v2
 library_name: peft
 tags:
-- base_model:adapter:mpoyraz/wav2vec2-xls-r-300m-cv7-turkish
+- base_model:adapter:openai/whisper-large-v2
 - lora
 - transformers
 ---

@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import torch
 import librosa
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
+from transformers import WhisperForConditionalGeneration, WhisperProcessor
 from datasets import Dataset, Audio
 import evaluate
 from pathlib import Path
@@ -18,23 +18,18 @@ class ModelEvaluator:
         self.data_path = Path(config.BASE_PATH) / self.user_id / "metadata_words.csv"
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        self.base_model_name = config.MODEL_NAME
+        # Whisper modeline göre base_model_name'i sabitliyoruz.
+        self.base_model_name = "openai/whisper-large-v2"
 
-        if self.personalized_model_dir.exists():
-            self.model_to_load = str(self.personalized_model_dir)
-            print(f"✅ {self.user_id} için kişiselleştirilmiş model yüklenecek: {self.model_to_load}")
-        else:
-            self.model_to_load = model_path or self.base_model_name
-            print(f"ℹ️  Kişiselleştirilmiş model bulunamadı. Varsayılan model kullanılacak: {self.model_to_load}")
-
-        self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_name)
+        print(f"✅ {self.user_id} için kişiselleştirilmiş model yüklenecek: {self.personalized_model_dir}")
         
-        if self.personalized_model_dir.exists():
-            from peft import PeftModel
-            base_model = Wav2Vec2ForCTC.from_pretrained(self.base_model_name)
-            self.model = PeftModel.from_pretrained(base_model, str(self.personalized_model_dir))
-        else:
-            self.model = Wav2Vec2ForCTC.from_pretrained(self.model_to_load)
+        # Whisper Processor'ı yüklüyoruz
+        self.processor = WhisperProcessor.from_pretrained(self.base_model_name, language="tr", task="transcribe")
+        
+        # Temel Whisper modelini ve üzerine eğitilmiş PEFT adaptörünü yüklüyoruz
+        from peft import PeftModel
+        base_model = WhisperForConditionalGeneration.from_pretrained(self.base_model_name)
+        self.model = PeftModel.from_pretrained(base_model, str(self.personalized_model_dir))
             
         self.model.to(self.device)
         self.wer_metric = evaluate.load("wer")
@@ -111,45 +106,47 @@ class ModelEvaluator:
         
         from torch.utils.data import DataLoader
 
+        # Whisper için özel collate fonksiyonu
         def collate_fn(batch):
-            """Batch için collate fonksiyonu."""
-            audio_arrays = []
-            reference_texts = []
+            input_features = []
+            labels = []
             
             for item in batch:
                 try:
-                    audio, sr = librosa.load(
-                        item['file_path']['path'], 
-                        sr=config.ORNEKLEME_ORANI
-                    )
-                    if len(audio) > 0:
-                        audio_arrays.append(audio)
-                        # Transcript sütununu kontrol et
-                        transcript = item.get('transcript', item.get('transcription', ''))
-                        reference_texts.append(str(transcript).strip())
+                    # Audio yükleme, processor input_features'ı oluşturacak
+                    audio_input = item['file_path']['array'] # already loaded by datasets
+                    
+                    # Transcription tokenization
+                    label = self.processor.tokenizer(item['transcript']).input_ids
+                    
+                    input_features.append({"input_features": audio_input})
+                    labels.append({"input_ids": label})
+
                 except Exception as e:
-                    print(f"⚠️  Ses dosyası yüklenemedi: {e}")
+                    print(f"⚠️  Ses veya transkript işlenirken hata: {e}")
                     continue
             
-            if len(audio_arrays) == 0:
+            if not input_features:
                 return None
             
-            input_features = self.processor(
-                audio_arrays, 
-                sampling_rate=config.ORNEKLEME_ORANI, 
-                return_tensors="pt", 
-                padding=True
-            ).input_values
+            # Input features'ı batch halinde hazırla
+            batch_input_features = self.processor.feature_extractor.pad(input_features, return_tensors="pt")
             
+            # Labels'ı batch halinde hazırla ve padding tokenlarını -100 ile değiştir
+            batch_labels = self.processor.tokenizer.pad(labels, return_tensors="pt")
+            batch_labels["input_ids"] = batch_labels["input_ids"].masked_fill(
+                batch_labels.attention_mask.ne(1), -100
+            )
+
             return {
-                "input_features": input_features, 
-                "reference_texts": reference_texts
+                "input_features": batch_input_features.input_features,
+                "labels": batch_labels.input_ids,
+                "attention_mask": batch_input_features.attention_mask
             }
 
-        # RTX A5000 için optimize edilmiş DataLoader
         dataloader = DataLoader(
             dataset, 
-            batch_size=16,  # RTX A5000 için artırıldı
+            batch_size=config.FINETUNE_BATCH_SIZE, # config'den al
             collate_fn=collate_fn,
             num_workers=config.DATALOADER_NUM_WORKERS,
             pin_memory=config.DATALOADER_PIN_MEMORY,
@@ -173,17 +170,32 @@ class ModelEvaluator:
                         continue
                     
                     input_features = batch["input_features"].to(self.device)
-
-                    logits = self.model(input_features).logits
-                    predicted_ids = torch.argmax(logits, dim=-1)
+                    # Whisper modeli için generate metodunu kullanıyoruz
+                    generated_ids = self.model.generate(
+                        input_features=input_features,
+                        # attention_mask=batch.get("attention_mask", None).to(self.device), # Whisper'da generate için attention_mask gerekli değil
+                        language="tr", # Türkçe dilini belirt
+                        task="transcribe", # Transkripsiyon görevi
+                        return_timestamps=False # Zaman damgalarını döndürme
+                    )
+                    
+                    # Tahminleri çözümlüyoruz
                     transcription = self.processor.batch_decode(
-                        predicted_ids, 
+                        generated_ids, 
+                        skip_special_tokens=True
+                    )
+
+                    # Referans metinleri çözümlüyoruz (padding'i kaldırarak)
+                    labels = batch["labels"].cpu().numpy()
+                    labels[labels == -100] = self.processor.tokenizer.pad_token_id
+                    reference_texts = self.processor.batch_decode(
+                        labels, 
                         skip_special_tokens=True
                     )
 
                     predictions.extend(transcription)
-                    references.extend(batch["reference_texts"])
-                    processed_count += len(batch["reference_texts"])
+                    references.extend(reference_texts)
+                    processed_count += len(transcription)
                     
                     if max_samples and processed_count >= max_samples:
                         break

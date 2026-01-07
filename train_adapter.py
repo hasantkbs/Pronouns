@@ -13,6 +13,8 @@ import logging
 from transformers import (
     Wav2Vec2ForCTC,
     Wav2Vec2Processor,
+    Wav2Vec2FeatureExtractor,
+    Wav2Vec2CTCTokenizer,
 )
 from peft import LoraConfig, get_peft_model
 from torch.utils.data import DataLoader
@@ -172,47 +174,38 @@ def _standalone_preprocess_function(examples, processor, augmenter=None):
         try:
             # Her örnek için ayrı ayrı işle
             inputs = processor(
-                audio, 
-                sampling_rate=config.ORNEKLEME_ORANI, 
-                return_tensors="pt", 
-                padding=False  # Padding yapma, collator yapacak
+                audio,
+                sampling_rate=config.ORNEKLEME_ORANI,
+                return_tensors="pt",
+                padding=False
             )
-            
-            # Input values'ı list'e çevir
             input_vals = inputs.input_values[0]
             if isinstance(input_vals, torch.Tensor):
                 input_vals = input_vals.tolist()
-            input_values_list.append(input_vals)
-            
+
             # Transcript'i tokenize et
-            # tokenizer() dict döndürür, input_ids'i al
             tokenized = processor.tokenizer(transcript)
             label_ids = tokenized.input_ids
-            
-            # Format kontrolü ve düzeltme
             if isinstance(label_ids, torch.Tensor):
                 label_ids = label_ids.tolist()
-            
-            # Eğer nested list ise ([[1,2,3]] gibi) flatten et
             if label_ids and isinstance(label_ids[0], list):
                 label_ids = label_ids[0]
+
+            # Sadece geçerli labelları ve onlara karşılık gelen inputları ekle
+            is_valid = label_ids and len(label_ids) > 0 and all(isinstance(tid, int) and tid >= 0 for tid in label_ids)
             
-            # Boş label kontrolü
-            if not label_ids or len(label_ids) == 0:
-                print(f"⚠️  Boş label: '{transcript}' -> atlanıyor")
-                continue
-            
-            # Label'ların geçerli token ID'leri içerdiğini kontrol et
-            if any(not isinstance(tid, int) or tid < 0 for tid in label_ids):
-                print(f"⚠️  Geçersiz label IDs: {label_ids[:5]}... -> atlanıyor")
-                continue
-                
-            label_ids_list.append(label_ids)
-            valid_indices.append(i)
-            
+            if is_valid:
+                input_values_list.append(input_vals)
+                label_ids_list.append(label_ids)
+                valid_indices.append(i)
+            else:
+                if not label_ids or len(label_ids) == 0:
+                    print(f"⚠️  Boş label: '{transcript}' -> atlanıyor")
+                else:
+                    print(f"⚠️  Geçersiz label IDs: {label_ids[:5]}... -> atlanıyor")
+        
         except Exception as e:
-            print(f"⚠️  Örnek {i} işlenirken hata: {e}")
-            continue
+            print(f"⚠️  Örnek {i} ('{transcript}') işlenirken hata: {e}")
     
     # Eğer hiç geçerli örnek yoksa
     if len(input_values_list) == 0:
@@ -278,11 +271,14 @@ class PersonalizedTrainer:
 
     def load_model_and_processor(self):
         print(f"📥 Temel model yükleniyor: {self.base_model_path}")
-        self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
+        feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(self.base_model_path)
+        tokenizer = Wav2Vec2CTCTokenizer.from_pretrained("./data/asr_data/")
+        self.processor = Wav2Vec2Processor(feature_extractor=feature_extractor, tokenizer=tokenizer)
         self.model = Wav2Vec2ForCTC.from_pretrained(
             self.base_model_path,
             attention_dropout=config.ATTENTION_DROPOUT,
             hidden_dropout=config.HIDDEN_DROPOUT,
+            vocab_size=len(self.processor.tokenizer)
         )
         
         # Gradient checkpointing (opsiyonel, VRAM tasarrufu için)
