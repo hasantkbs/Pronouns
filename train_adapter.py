@@ -13,8 +13,6 @@ import logging
 from transformers import (
     Wav2Vec2ForCTC,
     Wav2Vec2Processor,
-    Wav2Vec2FeatureExtractor,
-    Wav2Vec2CTCTokenizer,
 )
 from peft import LoraConfig, get_peft_model
 from torch.utils.data import DataLoader
@@ -23,9 +21,12 @@ from accelerate import Accelerator
 from tqdm import tqdm
 from datasets import Dataset, Audio
 from src.utils.utils import save_model_and_processor
+from src.services.reporting_service import ReportingService
 import config
 import librosa
 import evaluate
+import platform
+import time
 try:
     import audiomentations as A
     AUDIOMENTATIONS_AVAILABLE = True
@@ -110,14 +111,14 @@ def build_augment_pipeline(sampling_rate: int):
     
     return A.Compose([
         # Hafif gürültü ekleme (konuşma bozukluğu için düşük seviye)
-        A.AddGaussianNoise(min_amplitude=config.AUG_NOISE_MIN, max_amplitude=config.AUG_NOISE_MAX, p=config.AUG_NOISE_PROB),
+        A.AddGaussianNoise(min_amplitude=0.0005, max_amplitude=0.005, p=0.3),
         # Zaman esnetme (konuşma hızı varyasyonu)
-        A.TimeStretch(min_rate=config.AUG_TIME_STRETCH_MIN, max_rate=config.AUG_TIME_STRETCH_MAX, p=config.AUG_TIME_STRETCH_PROB, leave_length_unchanged=False),
+        A.TimeStretch(min_rate=0.9, max_rate=1.1, p=0.3, leave_length_unchanged=False),
         # Pitch değişimi (hafif, konuşma bozukluğu için)
-        A.PitchShift(min_semitones=config.AUG_PITCH_SHIFT_MIN, max_semitones=config.AUG_PITCH_SHIFT_MAX, p=config.AUG_PITCH_SHIFT_PROB),
+        A.PitchShift(min_semitones=-2, max_semitones=2, p=0.3),
         # Zaman maskesi (küçük bölümler)
-        A.TimeMask(min_band_part=0.03, max_band_part=0.1, p=config.AUG_TIME_MASK_PROB),
-    ], p=config.AUGMENTATION_PROB)  # %40 ihtimalle augmentation uygula
+        A.TimeMask(min_band_part=0.03, max_band_part=0.1, p=0.2),
+    ], p=0.6)  # %60 ihtimalle augmentation uygula
 
 def _standalone_preprocess_function(examples, processor, augmenter=None):
     """
@@ -174,38 +175,47 @@ def _standalone_preprocess_function(examples, processor, augmenter=None):
         try:
             # Her örnek için ayrı ayrı işle
             inputs = processor(
-                audio,
-                sampling_rate=config.ORNEKLEME_ORANI,
-                return_tensors="pt",
-                padding=False
+                audio, 
+                sampling_rate=config.ORNEKLEME_ORANI, 
+                return_tensors="pt", 
+                padding=False  # Padding yapma, collator yapacak
             )
+            
+            # Input values'ı list'e çevir
             input_vals = inputs.input_values[0]
             if isinstance(input_vals, torch.Tensor):
                 input_vals = input_vals.tolist()
-
+            input_values_list.append(input_vals)
+            
             # Transcript'i tokenize et
+            # tokenizer() dict döndürür, input_ids'i al
             tokenized = processor.tokenizer(transcript)
             label_ids = tokenized.input_ids
+            
+            # Format kontrolü ve düzeltme
             if isinstance(label_ids, torch.Tensor):
                 label_ids = label_ids.tolist()
+            
+            # Eğer nested list ise ([[1,2,3]] gibi) flatten et
             if label_ids and isinstance(label_ids[0], list):
                 label_ids = label_ids[0]
-
-            # Sadece geçerli labelları ve onlara karşılık gelen inputları ekle
-            is_valid = label_ids and len(label_ids) > 0 and all(isinstance(tid, int) and tid >= 0 for tid in label_ids)
             
-            if is_valid:
-                input_values_list.append(input_vals)
-                label_ids_list.append(label_ids)
-                valid_indices.append(i)
-            else:
-                if not label_ids or len(label_ids) == 0:
-                    print(f"⚠️  Boş label: '{transcript}' -> atlanıyor")
-                else:
-                    print(f"⚠️  Geçersiz label IDs: {label_ids[:5]}... -> atlanıyor")
-        
+            # Boş label kontrolü
+            if not label_ids or len(label_ids) == 0:
+                print(f"⚠️  Boş label: '{transcript}' -> atlanıyor")
+                continue
+            
+            # Label'ların geçerli token ID'leri içerdiğini kontrol et
+            if any(not isinstance(tid, int) or tid < 0 for tid in label_ids):
+                print(f"⚠️  Geçersiz label IDs: {label_ids[:5]}... -> atlanıyor")
+                continue
+                
+            label_ids_list.append(label_ids)
+            valid_indices.append(i)
+            
         except Exception as e:
-            print(f"⚠️  Örnek {i} ('{transcript}') işlenirken hata: {e}")
+            print(f"⚠️  Örnek {i} işlenirken hata: {e}")
+            continue
     
     # Eğer hiç geçerli örnek yoksa
     if len(input_values_list) == 0:
@@ -243,18 +253,34 @@ class PersonalizedTrainer:
         log_file = setup_logging(self.user_id)
         logger = logging.getLogger(__name__)
         
+        # Reporting service
+        reporting_service = ReportingService()
+        
+        # Training start time
+        training_start_time = time.time()
+        start_datetime = datetime.now()
+        
         print(f"🎯 {self.user_id} için kişiselleştirme süreci başlıyor.")
         print("="*50)
         logger.info(f"Training started for user: {self.user_id}")
         
-        # Sistem bilgileri
-        import platform
-        logger.info(f"Platform: {platform.system()} {platform.release()}")
-        logger.info(f"Python: {sys.version}")
+        # System information
+        sys_info = {
+            "platform": platform.system(),
+            "platform_release": platform.release(),
+            "python_version": sys.version.split()[0],  # Just version number
+            "cuda_available": torch.cuda.is_available(),
+            "cuda_version": torch.version.cuda if torch.cuda.is_available() else None,
+            "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+            "gpu_memory_gb": round(torch.cuda.get_device_properties(0).total_memory / 1024**3, 2) if torch.cuda.is_available() else None
+        }
+        
+        logger.info(f"Platform: {sys_info['platform']} {sys_info['platform_release']}")
+        logger.info(f"Python: {sys_info['python_version']}")
         if torch.cuda.is_available():
-            logger.info(f"CUDA Version: {torch.version.cuda}")
-            logger.info(f"GPU: {torch.cuda.get_device_name(0)}")
-            logger.info(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+            logger.info(f"CUDA Version: {sys_info['cuda_version']}")
+            logger.info(f"GPU: {sys_info['gpu_name']}")
+            logger.info(f"GPU Memory: {sys_info['gpu_memory_gb']:.2f} GB")
         
         if not self.user_data_path.exists() or not (self.user_data_path / "metadata_words.csv").exists():
             error_msg = f"❌ Hata: {self.user_data_path} için veri bulunamadı."
@@ -265,21 +291,20 @@ class PersonalizedTrainer:
         self.load_model_and_processor()
         train_dataset = self.prepare_dataset(split='train')
         eval_dataset = self.prepare_dataset(split='eval')
-        self.train_model(train_dataset, eval_dataset)
+        
+        # Store dataset info for reporting
+        self.train_samples = len(train_dataset) if train_dataset else 0
+        self.eval_samples = len(eval_dataset) if eval_dataset else 0
+        
+        # Train model (will store metrics in self)
+        self.train_model(train_dataset, eval_dataset, reporting_service, sys_info, start_datetime, training_start_time)
         
         logger.info(f"Training completed for user: {self.user_id}")
 
     def load_model_and_processor(self):
         print(f"📥 Temel model yükleniyor: {self.base_model_path}")
-        feature_extractor = Wav2Vec2FeatureExtractor.from_pretrained(self.base_model_path)
-        tokenizer = Wav2Vec2CTCTokenizer.from_pretrained("./data/asr_data/")
-        self.processor = Wav2Vec2Processor(feature_extractor=feature_extractor, tokenizer=tokenizer)
-        self.model = Wav2Vec2ForCTC.from_pretrained(
-            self.base_model_path,
-            attention_dropout=config.ATTENTION_DROPOUT,
-            hidden_dropout=config.HIDDEN_DROPOUT,
-            vocab_size=len(self.processor.tokenizer)
-        )
+        self.processor = Wav2Vec2Processor.from_pretrained(self.base_model_path)
+        self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
         
         # Gradient checkpointing (opsiyonel, VRAM tasarrufu için)
         if config.GRADIENT_CHECKPOINTING and hasattr(self.model, 'gradient_checkpointing_enable'):
@@ -295,7 +320,7 @@ class PersonalizedTrainer:
             r=config.ADAPTER_REDUCTION_FACTOR,
             lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2,
             target_modules=["q_proj", "v_proj", "k_proj", "out_proj"],  # Daha fazla modül
-            lora_dropout=config.LORA_DROPOUT,  # Daha düşük dropout (overfitting riski düşük)
+            lora_dropout=0.05,  # Daha düşük dropout (overfitting riski düşük)
             bias="none",
             # task_type parametresi kaldırıldı - PEFT otomatik algılar
         )
@@ -419,7 +444,8 @@ class PersonalizedTrainer:
         self.model.train()
         return avg_loss, wer, cer
 
-    def train_model(self, train_dataset, eval_dataset=None):
+    def train_model(self, train_dataset, eval_dataset=None, reporting_service=None, 
+                   sys_info=None, start_datetime=None, training_start_time=None):
         """Model eğitimini başlatır."""
         print("🚀 Kişiselleştirilmiş model eğitimi başlıyor...")
         print(f"   Epoch sayısı: {config.NUM_FINETUNE_EPOCHS}")
@@ -428,6 +454,15 @@ class PersonalizedTrainer:
         print(f"   Gradient accumulation: {config.GRADIENT_ACCUMULATION_STEPS}")
         print(f"   Augmentation: {'Aktif' if config.USE_AUGMENTATION and AUDIOMENTATIONS_AVAILABLE else 'Pasif'}")
         print(f"   Validation: {'Aktif' if eval_dataset is not None else 'Pasif'}")
+        
+        # Initialize training metrics
+        self.final_train_loss = None
+        self.final_wer = None
+        self.final_cer = None
+        self.best_wer = float('inf')
+        self.best_cer = float('inf')
+        self.epochs_completed = 0
+        self.early_stopped = False
 
         # Augmentation pipeline oluştur
         augmenter = None
@@ -643,9 +678,12 @@ class PersonalizedTrainer:
                             if self.patience_counter >= config.EARLY_STOPPING_PATIENCE:
                                 print(f"\n   ⏹️  Early stopping tetiklendi! (Patience: {config.EARLY_STOPPING_PATIENCE})")
                                 print(f"      En iyi validation loss: {self.best_val_loss:.4f}")
+                                self.early_stopped = True
                                 break
                 
                 avg_epoch_loss = epoch_loss / num_batches if num_batches > 0 else 0.0
+                self.final_train_loss = avg_epoch_loss
+                self.epochs_completed = epoch + 1
                 print(f"\n   Epoch {epoch+1}/{num_epochs} tamamlandı. Ortalama Loss: {avg_epoch_loss:.4f}")
                 
                 # Epoch sonunda validation
@@ -653,6 +691,12 @@ class PersonalizedTrainer:
                     val_loss, wer, cer = self.evaluate_model(eval_dataloader, accelerator)
                     print(f"   📊 Epoch sonu Validation:")
                     print(f"      Loss: {val_loss:.4f} | WER: {wer:.4f} ({wer*100:.2f}%) | CER: {cer:.4f} ({cer*100:.2f}%)")
+                    
+                    # Track best metrics
+                    if wer < self.best_wer:
+                        self.best_wer = wer
+                    if cer < self.best_cer:
+                        self.best_cer = cer
                 
                 # Early stopping kontrolü
                 if self.patience_counter >= config.EARLY_STOPPING_PATIENCE:
@@ -677,7 +721,56 @@ class PersonalizedTrainer:
             print(f"   Toplam eğitim adımı: {global_step}")
             if eval_dataloader is not None:
                 final_val_loss, final_wer, final_cer = self.evaluate_model(eval_dataloader, accelerator)
+                self.final_wer = final_wer
+                self.final_cer = final_cer
                 print(f"   Final Validation - Loss: {final_val_loss:.4f} | WER: {final_wer:.4f} ({final_wer*100:.2f}%) | CER: {final_cer:.4f} ({final_cer*100:.2f}%)")
+            
+            # Create training report
+            if reporting_service:
+                training_end_time = time.time()
+                duration_seconds = training_end_time - training_start_time
+                hours = int(duration_seconds // 3600)
+                minutes = int((duration_seconds % 3600) // 60)
+                seconds = int(duration_seconds % 60)
+                duration_formatted = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                
+                training_data = {
+                    "base_model": self.base_model_path,
+                    "num_epochs": config.NUM_FINETUNE_EPOCHS,
+                    "batch_size": config.FINETUNE_BATCH_SIZE,
+                    "learning_rate": config.FINETUNE_LEARNING_RATE,
+                    "gradient_accumulation_steps": config.GRADIENT_ACCUMULATION_STEPS,
+                    "adapter_reduction_factor": config.ADAPTER_REDUCTION_FACTOR,
+                    "warmup_steps": config.WARMUP_STEPS,
+                    "weight_decay": config.WEIGHT_DECAY,
+                    "early_stopping_patience": config.EARLY_STOPPING_PATIENCE,
+                    "use_augmentation": config.USE_AUGMENTATION and AUDIOMENTATIONS_AVAILABLE,
+                    "mixed_precision": getattr(config, "MIXED_PRECISION", "no"),
+                    "train_samples": self.train_samples,
+                    "eval_samples": self.eval_samples,
+                    "total_samples": self.train_samples + self.eval_samples,
+                    "total_steps": global_step,
+                    "epochs_completed": self.epochs_completed,
+                    "final_train_loss": self.final_train_loss,
+                    "best_val_loss": self.best_val_loss,
+                    "final_wer": self.final_wer,
+                    "final_cer": self.final_cer,
+                    "best_wer": self.best_wer if self.best_wer != float('inf') else None,
+                    "best_cer": self.best_cer if self.best_cer != float('inf') else None,
+                    "early_stopped": self.early_stopped,
+                    "device": self.device,
+                    "gpu_name": sys_info.get("gpu_name") if sys_info else None,
+                    "gpu_memory_gb": sys_info.get("gpu_memory_gb") if sys_info else None,
+                    "platform": sys_info.get("platform") if sys_info else None,
+                    "python_version": sys_info.get("python_version") if sys_info else None,
+                    "start_time": start_datetime.isoformat() if start_datetime else None,
+                    "end_time": datetime.now().isoformat(),
+                    "duration_seconds": duration_seconds,
+                    "duration_formatted": duration_formatted
+                }
+                
+                report_file = reporting_service.log_training_session(self.user_id, training_data)
+                print(f"\n📊 Training report saved: {report_file}")
             
         except Exception as e:
             print(f"\n❌ Eğitim sırasında hata oluştu: {e}")

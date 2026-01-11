@@ -10,6 +10,7 @@ import evaluate
 from pathlib import Path
 import config
 from tqdm import tqdm
+from src.services.reporting_service import ReportingService
 
 class ModelEvaluator:
     def __init__(self, user_id, model_path=None):
@@ -222,14 +223,33 @@ class ModelEvaluator:
             print("="*50)
             
             # Örnek tahminler göster
+            sample_predictions = []
             if len(predictions) > 0:
                 print("\n📝 Örnek Tahminler:")
                 for i in range(min(5, len(predictions))):
                     print(f"   {i+1}. Gerçek: '{references[i]}'")
                     print(f"      Tahmin: '{predictions[i]}'")
                     print()
+                    sample_predictions.append({
+                        "reference": references[i],
+                        "prediction": predictions[i]
+                    })
 
             self.provide_suggestions(wer, cer)
+            
+            # Create evaluation report
+            reporting_service = ReportingService()
+            evaluation_data = {
+                "wer": wer,
+                "cer": cer,
+                "total_samples": len(dataset),
+                "evaluated_samples": len(predictions),
+                "model_path": str(self.personalized_model_dir),
+                "base_model": self.base_model_name,
+                "sample_predictions": sample_predictions
+            }
+            report_file = reporting_service.log_evaluation_session(self.user_id, evaluation_data)
+            print(f"\n📊 Evaluation report saved: {report_file}")
             
         except Exception as e:
             print(f"\n❌ Değerlendirme sırasında hata: {e}")

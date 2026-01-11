@@ -107,28 +107,51 @@ The system will prompt you for a User ID. Type `Furkan` and press ENTER. The app
 Pronouns/
 ├── app.py                          # Main application entry point
 ├── config.py                       # Configuration file
+├── collect_data.py                 # Data collection script
 ├── prepare_training_data.py        # Data preparation script
 ├── train_adapter.py                # Model training script
 ├── evaluate_model.py               # Model evaluation script
 ├── src/
-│   ├── core/
+│   ├── core/                       # Core Business Logic
 │   │   ├── asr.py                  # ASR System (Wav2Vec2)
 │   │   ├── nlu.py                  # Natural Language Understanding
 │   │   └── actions.py              # Action execution
-│   └── utils/
-│       └── utils.py                # Helper functions
+│   ├── services/                   # Business Services Layer
+│   │   ├── recording_service.py    # Recording operations service
+│   │   └── model_service.py        # Model management service
+│   ├── data/                       # Data Access Layer
+│   │   └── repository.py           # Repository pattern
+│   ├── training/                   # Training Modules
+│   │   ├── train_asr.py            # ASR training module
+│   │   ├── train_lm.py             # Language Model training
+│   │   ├── custom_collator.py      # Custom data collator
+│   │   └── augment_from_words.py   # Data augmentation
+│   ├── utils/                      # Utility Functions
+│   │   ├── utils.py                # Helper functions
+│   │   └── reporting.py            # Reporting functions
+│   └── constants.py                # Constants (separate from config)
 ├── data/
 │   ├── users/
-│   │   └── Furkan/
-│   │       ├── metadata_words.csv  # Audio file metadata
-│   │       ├── train.csv           # Training dataset
-│   │       ├── eval.csv            # Evaluation dataset
-│   │       └── words/              # Directory for audio files (.wav)
+│   │   └── {user_id}/
+│   │       ├── words/              # Word recordings
+│   │       │   └── {word}/
+│   │       │       └── rep{num}.wav
+│   │       ├── letters/           # Letter recordings
+│   │       ├── audio/             # Sentence recordings
+│   │       └── metadata_*.csv     # Metadata files
 │   └── models/
 │       └── personalized_models/
-│           └── Furkan/             # Saved personalized model adapter
+│           └── {user_id}/
+│               └── checkpoints/
+│                   └── best_model/
+├── datasets/                       # Dataset files
+│   ├── words_set/
+│   ├── sentence_sets/
+│   └── letters_set/
 └── requirements.txt                # Python dependencies
 ```
+
+For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## ⚙️ Configuration
 
@@ -187,3 +210,10 @@ The training pipeline has been optimized specifically for speech disorder recogn
 Target metrics for a good model:
 - **WER < 0.15** (Word Error Rate less than 15%)
 - **CER < 0.05** (Character Error Rate less than 5%)
+
+## 📚 Documentation
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and design patterns
+- **[TRAINING_GUIDE.md](TRAINING_GUIDE.md)** - Detailed training guide and hyperparameter tuning
+- **[SERVER_OPTIMIZATION.md](SERVER_OPTIMIZATION.md)** - Server optimization for RTX A5000
+- **[LINUX_SERVER_SETUP.md](LINUX_SERVER_SETUP.md)** - Linux server setup and configuration

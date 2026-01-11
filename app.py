@@ -8,8 +8,10 @@ from pathlib import Path
 import config
 from src.core.asr import ASRSystem
 from src.utils.utils import record_audio
-from src.core.nlu import NLU_System # Added
-from src.core.actions import run_action # Added
+from src.core.nlu import NLU_System
+from src.core.actions import run_action
+from src.services.model_service import ModelService
+from src.constants import EXIT_COMMANDS
 
 def get_user_id():
     """Kullanıcıdan bir kimlik alır."""
@@ -24,12 +26,11 @@ def main():
         print("❌ Kullanıcı kimliği girilmedi. Sistem kapatılıyor.")
         return
     
-    personalized_model_path = Path("data/models/personalized_models") / user_id
-    model_to_load = None
-
-    if personalized_model_path.exists() and any(personalized_model_path.iterdir()):
-        print(f"✅ {user_id} için kişiselleştirilmiş model bulundu!")
-        model_to_load = str(personalized_model_path)
+    # Model servisi ile model bulma
+    model_to_load = ModelService.find_personalized_model(user_id)
+    
+    if model_to_load:
+        print(f"✅ {user_id} için kişiselleştirilmiş model bulundu! ({model_to_load})")
     else:
         print(f"ℹ️  {user_id} için kişiselleştirilmiş model bulunamadı.")
         print(f"   Varsayılan model kullanılacak: {config.MODEL_NAME}")
@@ -81,8 +82,8 @@ def main():
         action_response = run_action(intent, entities)
         print(f"🤖 {action_response}")
 
-        # d. Çıkış kontrolü (NLU'dan gelen intent'e göre)
-        if intent == 'exit':
+        # d. Çıkış kontrolü (NLU'dan gelen intent'e göre veya metin kontrolü)
+        if intent == 'exit' or recognized_text.lower().strip() in EXIT_COMMANDS:
             print("\n👋 Sistem kapatılıyor...")
             break
     

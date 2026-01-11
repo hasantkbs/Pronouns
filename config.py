@@ -11,9 +11,28 @@ ORNEKLEME_ORANI = 16000  # Hz
 # Daha yüksek doğruluk için KenLM dil modeli kullanılabilir
 KENLM_MODEL_PATH = "data/lm/lm.arpa"
 
-# --- Ses Kayıt Ayarları ---
-KAYIT_SURESI_SN = 5  # Varsayılan kayıt süresi (saniye)
-SES_ESIK_DEGERI = 0.01  # Ses aktivitesi için hassasiyet eşiği
+# --- Ses Kayıt Ayarları (Konuşma Bozukluğu için Optimize) ---
+KAYIT_SURESI_SN = 4  # Varsayılan kayıt süresi (saniye) - kelime için yeterli
+SES_ESIK_DEGERI = 0.008  # Ses aktivitesi için hassasiyet eşiği (daha düşük = daha sessiz sesleri algılar)
+VAD_SILENCE_LIMIT_SEC = 2.5  # Konuşma bittikten sonra beklenen sessizlik süresi (konuşma bozukluğu için daha uzun)
+VAD_SPEECH_WAIT_SEC = 8  # Konuşma beklenen maksimum süre (yavaş konuşma için)
+
+# --- Ses Kalitesi Kontrol Ayarları (Konuşma Bozukluğu için Toleranslı) ---
+MIN_RMS_LEVEL = 300  # Minimum RMS seviyesi (daha düşük sesleri kabul et)
+MAX_RMS_LEVEL = 25000  # Maksimum RMS seviyesi (daha yüksek tolerans)
+MIN_DURATION_SEC = 0.2  # Minimum kayıt süresi (çok kısa kelimeler için)
+MAX_DURATION_SEC = 8  # Maksimum kayıt süresi (kelime için 4 sn + tolerans)
+QUALITY_THRESHOLD = 40  # Minimum kalite skoru (konuşma bozukluğu için daha toleranslı)
+AUTO_RERECORD_ENABLED = True  # Otomatik yeniden kayıt önerisi aktif mi?
+
+# --- Tutarlılık Kontrol Ayarları ---
+CONSISTENCY_CHECK_ENABLED = True  # Aynı kelime için süre tutarlılığı kontrolü
+CONSISTENCY_TOLERANCE = 0.5  # Aynı kelime için süre farkı toleransı (saniye)
+
+# --- Kayıt Tekrar Ayarları (Konuşma Bozukluğu için) ---
+# Araştırmalara göre konuşma bozukluğu için 5-10 kayıt ideal
+# 10 kayıt: İyi denge (yeterli veri + kullanıcı yorgunluğu düşük)
+IDEAL_REPETITIONS = 10  # Her kelime için ideal kayıt sayısı
 
 # --- Sistem Ayarları ---
 GECICI_DOSYA_YOLU = "temp_recording.wav"  # Geçici ses dosyası
@@ -21,6 +40,11 @@ GECICI_DOSYA_YOLU = "temp_recording.wav"  # Geçici ses dosyası
 # --- Veri Yolları Ayarları ---
 BASE_PATH = "data/users"  # Kullanıcı verilerinin depolanacağı ana dizin
 USER_ID = "default_user"  # Varsayılan kullanıcı ID'si (kullanıcıya özel veriler için)
+
+# --- Logging ve Reporting Ayarları ---
+LOG_DIR = "logs"  # Log dosyalarının kaydedileceği dizin
+LOG_LEVEL = "INFO"  # Log seviyesi (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+REPORTS_DIR = "reports"  # Rapor dosyalarının kaydedileceği dizin
 
 # --- Model İnce Ayar Ayarları ---
 # Optimum performans için ayarlandı (küçük kişisel veri setleri için)

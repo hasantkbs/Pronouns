@@ -12,19 +12,29 @@ Kullanım:
 """
 
 import os
-import sounddevice as sd
-import soundfile as sf
-import numpy as np
+import sys
 import pandas as pd
 from pathlib import Path
 import argparse
-import torch
-import librosa
+import platform
+
+# Add project root to path for imports
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from src.utils.utils import record_audio, calculate_audio_quality, play_audio, check_consistency
+from src.services.recording_service import RecordingService
+from src.services.model_service import ModelService
+from src.services.reporting_service import ReportingService
+from src.data.repository import UserDataRepository
+from src.constants import (
+    RECORD_TYPE_WORD, RECORD_TYPE_SENTENCE, RECORD_TYPE_LETTER,
+    DEFAULT_REPETITIONS, DATASET_DIRS, METADATA_FILENAMES, USER_DATA_SUBDIRS
+)
+import config
 
 
 
 # --- Yapılandırma ---
-TARGET_SAMPLING_RATE = 16000
+# TARGET_SAMPLING_RATE artık config.py'den alınacak (record_audio fonksiyonu içinde)
 BASE_DATA_PATH = "data/users"
 
 
@@ -73,38 +83,92 @@ def get_user_id():
         raise ValueError("Kullanıcı kimliği boş bırakılamaz.")
     return user_id
 
-def record_audio(duration, samplerate):
-    """Belirtilen sürede ses kaydı yapar."""
-    print("▶️  Kayıt başladı...")
-    recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='float32')
-    sd.wait()  # Kaydın bitmesini bekle
-    print("⏹️  Kayıt tamamlandı.")
-    return recording
+# record_audio function is now imported from src.utils.utils (VAD-enabled)
 
 
+
+# normalize_path_for_cross_platform artık RecordingService içinde
 
 def run_recording_session(user_id, items_to_record, save_path, metadata_path, item_type, repetitions=3, re_record=False):
     """Cümle, kelime veya harf kayıt oturumunu yürütür."""
     save_path.mkdir(parents=True, exist_ok=True)
     metadata = []
     quit_session = False
+    
+    # Initialize reporting service
+    reporting_service = ReportingService()
+    
+    # Path yolu kontrolü ve uyarı
+    import platform
+    current_platform = platform.system()
+    print("\n" + "="*70)
+    print("📁 DOSYA YOLU BİLGİSİ")
+    print("="*70)
+    print(f"   🖥️  Platform: {current_platform}")
+    print(f"   📂 Kayıt Dizini: {save_path.absolute()}")
+    print(f"   📄 Metadata Dosyası: {metadata_path.absolute()}")
+    
+    if current_platform == "Darwin":  # macOS
+        print(f"   ⚠️  UYARI: MacBook'ta kayıt yapıyorsunuz.")
+        print(f"   💡 Linux server'da eğitim için relative path kullanılacak.")
+        print(f"   💡 Dosya yolları otomatik olarak normalize edilecek.")
+    elif current_platform == "Linux":
+        print(f"   ✅ Linux platformunda kayıt yapıyorsunuz.")
+    print("="*70)
+    
+    # İstatistikler için sayaçlar
+    stats = {
+        "total_recordings": 0,
+        "successful_recordings": 0,
+        "failed_recordings": 0,
+        "rerecorded": 0,
+        "avg_quality_score": 0.0,
+        "quality_scores": [],
+        "items_completed": 0,  # Tamamlanan item sayısı
+        "items_total": 0
+    }
 
     # Mevcut kayıtları CSV'den kontrol et
     already_recorded = set()
+    already_recorded_details = {}  # Her item için kaç tekrar kaydedilmiş
+    fully_recorded = set()  # Yeterli kaydı olan itemler (IDEAL_REPETITIONS kadar)
+    
     if metadata_path.exists() and not re_record:
         try:
             existing_df = pd.read_csv(metadata_path)
             if 'transcription' in existing_df.columns:
                 # CSV'deki transkripsiyonları kümeye ekle
-                already_recorded = set(existing_df['transcription'].dropna().unique())
-                print(f"\nBilgi: Mevcut {len(already_recorded)} kayıtlı {item_type} bulundu.")
+                all_recorded = set(existing_df['transcription'].dropna().unique())
+                
+                # Her item için tekrar sayısını hesapla
+                for transcription in all_recorded:
+                    item_records = existing_df[existing_df['transcription'] == transcription]
+                    rep_count = len(item_records)
+                    already_recorded_details[transcription] = rep_count
+                    
+                    # Eğer yeterli kayıt varsa (IDEAL_REPETITIONS kadar), tam kayıtlı olarak işaretle
+                    if rep_count >= config.IDEAL_REPETITIONS:
+                        fully_recorded.add(transcription)
+                        already_recorded.add(transcription)  # Bu item'i atla
+                    elif rep_count > 0:
+                        # Kısmen kayıtlı - eksik kayıtları tamamla
+                        already_recorded.add(transcription)
+                
+                print(f"\n📊 Mevcut Kayıt Durumu:")
+                print(f"   • Toplam kayıtlı {item_type}: {len(all_recorded)}")
+                print(f"   • Tam kayıtlı (≥{config.IDEAL_REPETITIONS} kayıt): {len(fully_recorded)}")
+                print(f"   • Kısmen kayıtlı: {len(already_recorded) - len(fully_recorded)}")
+                if already_recorded_details:
+                    avg_reps = sum(already_recorded_details.values()) / len(already_recorded_details)
+                    print(f"   • Ortalama tekrar sayısı: {avg_reps:.1f}")
         except (pd.errors.EmptyDataError, KeyError):
             print(f"Bilgi: Mevcut metadata dosyası ({metadata_path.name}) boş veya geçersiz. Yeni bir dosya oluşturulacak.")
             pass # Dosya boşsa veya sütun yoksa devam et
 
-    # Kaydedilecek yeni öğeleri filtrele (daha önce kaydedilmemiş olanlar)
+    # Kaydedilecek yeni öğeleri filtrele
     if not re_record:
-        items_to_record_new = [item for item in items_to_record if item not in already_recorded]
+        # Tam kayıtlı olanları atla, kısmen kayıtlı olanları dahil et (eksik kayıtları tamamlamak için)
+        items_to_record_new = [item for item in items_to_record if item not in fully_recorded]
     else:
         items_to_record_new = items_to_record
 
@@ -118,8 +182,25 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
     
     # "Genel No" için başlangıç sayısını belirle
     num_already_recorded = len(already_recorded)
+    stats["items_total"] = len(items_to_record_new)
 
-    print(f"\n-> Toplam {len(items_to_record)} {item_type} içinden {len(items_to_record_new)} adet yeni {item_type} kaydedilecek.")
+    # Detaylı başlangıç istatistikleri
+    print("\n" + "="*70)
+    print("📊 KAYIT İSTATİSTİKLERİ")
+    print("="*70)
+    print(f"   📝 Kaynak Dosya: {len(items_to_record)} {item_type}")
+    print(f"   ✅ Zaten Kayıtlı: {len(already_recorded)} {item_type}")
+    print(f"   🆕 Yeni Kaydedilecek: {len(items_to_record_new)} {item_type}")
+    print(f"   🔄 Her {item_type} için ideal tekrar sayısı: {config.IDEAL_REPETITIONS}")
+    # Toplam kayıt hesaplama - kısmen kayıtlı olanlar için eksik kayıtları da dahil et
+    total_records_needed = 0
+    for item in items_to_record_new:
+        current_count = already_recorded_details.get(item, 0)
+        needed = max(0, config.IDEAL_REPETITIONS - current_count)
+        total_records_needed += needed
+    print(f"   📦 Toplam kayıt sayısı: ~{total_records_needed} kayıt (eksik kayıtlar dahil)")
+    print(f"   📂 Kayıt Dizini: {save_path.absolute()}")
+    print("="*70)
 
     try:
         # Sadece yeni (kaydedilmemiş) öğeler üzerinde döngü yap
@@ -137,52 +218,241 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
             # Ekranda gösterilecek Genel No (toplam kayıt sayısı)
             genel_no = num_already_recorded + i + 1
 
-            print("\n" + "="*50)
-            # İlerleme durumunu göster: yeni listedeki sıra / toplam yeni sayısı
-            print(f"Kayıt {i+1}/{len(items_to_record_new)} (Genel No: {genel_no}): -> '{item}'")
+            print("\n" + "="*70)
+            # Detaylı ilerleme durumunu göster
+            progress_percent = ((i) / len(items_to_record_new)) * 100
+            remaining_items = len(items_to_record_new) - i
+            print(f"📝 İlerleme: {i+1}/{len(items_to_record_new)} {item_type} ({progress_percent:.1f}%)")
+            print(f"   • Şu anki: '{item}' (Genel No: {genel_no})")
+            print(f"   • Kalan: {remaining_items} {item_type}")
+            print(f"   • Tamamlanan: {stats['items_completed']} {item_type}")
+            print("="*70)
+            
+            # Kelime kayıtları için özel klasör yapısı: words/kelime/rep1.wav
+            if item_type == "kelime":
+                # Her kelime için ayrı klasör oluştur
+                word_dir = save_path / item
+                word_dir.mkdir(parents=True, exist_ok=True)
             
             recorded_files_for_item = []
-            for rep_num in range(1, repetitions + 1):
+            durations_for_item = []  # Tutarlılık kontrolü için süreleri sakla
+            
+            # Bu item için mevcut kayıt sayısını kontrol et
+            current_rep_count = already_recorded_details.get(item, 0)
+            remaining_reps = max(0, config.IDEAL_REPETITIONS - current_rep_count)
+            
+            # Eğer yeterli kayıt varsa, bu item'i atla
+            if remaining_reps == 0 and not re_record:
+                print(f"   ✅ '{item}' için zaten {current_rep_count} kayıt mevcut (yeterli). Atlanıyor...")
+                stats["items_completed"] += 1
+                continue
+            
+            # Eksik kayıtları tamamla
+            if current_rep_count > 0 and not re_record:
+                print(f"   ℹ️  '{item}' için {current_rep_count}/{config.IDEAL_REPETITIONS} kayıt mevcut. {remaining_reps} kayıt daha yapılacak.")
+                # Eksik kayıtlar için rep_num'ı ayarla
+                start_rep = current_rep_count + 1
+                end_rep = config.IDEAL_REPETITIONS
+            else:
+                # Yeni kayıt - baştan başla
+                start_rep = 1
+                end_rep = config.IDEAL_REPETITIONS
+            
+            for rep_num in range(start_rep, end_rep + 1):
                 print(f"   -> Tekrar {rep_num}/{repetitions}: '{item}' için kayıt...")
+                
+                # Önceki kayıtlar varsa, ortalama süreyi göster (tutarlılık için rehber)
+                if durations_for_item and config.CONSISTENCY_CHECK_ENABLED:
+                    avg_duration = sum(durations_for_item) / len(durations_for_item)
+                    print(f"   💡 Önceki kayıtların ortalama süresi: {avg_duration:.2f}s (tutarlılık için rehber)")
                 
                 user_input = input("   Hazır olduğunuzda ENTER'a basın (çıkmak için 'q' yazıp ENTER'a basın): ")
                 if user_input.lower() == 'q':
                     quit_session = True
                     break
 
-                # Kayıt süresini türe göre ayarla
+                # Kayıt süresini türe göre ayarla (konuşma bozukluğu için optimize)
                 if item_type == "cümle":
-                    duration = 20
+                    record_duration = 20
                 elif item_type == "kelime":
-                    duration = 4
+                    record_duration = 4  # Konuşma bozukluğu için 4 saniye yeterli
                 else: # Harf için
-                    duration = 2
+                    record_duration = 2
                 
-                rec = record_audio(duration=duration, samplerate=TARGET_SAMPLING_RATE)
+                # Dosya yolu ve adını belirle
+                if item_type == "kelime":
+                    # Kelime için: words/kelime/rep1.wav formatı
+                    file_name = f"rep{rep_num}.wav"
+                    file_path = word_dir / file_name
+                elif item_type == "cümle":
+                    # Cümle için: user_id_cümle_file_number_rep1.wav
+                    file_name = f"{user_id}_{item_type}_{file_number}_rep{rep_num}.wav"
+                    file_path = save_path / file_name
+                else:  # Harf için
+                    # Harf için: user_id_harf_file_number_rep1.wav
+                    file_name = f"{user_id}_{item_type}_{file_number}_rep{rep_num}.wav"
+                    file_path = save_path / file_name
                 
-                # Tutarlı dosya adı oluştur (orijinal indeksi kullanarak)
-                file_name = f"{user_id}_{item_type}_{file_number}_rep{rep_num}.wav"
-                file_path = save_path / file_name
+                # VAD-enabled record_audio kullan (dosyayı otomatik kaydeder)
+                recorded_file = record_audio(file_path=str(file_path), record_seconds=record_duration)
                 
-                sf.write(file_path, rec, TARGET_SAMPLING_RATE)
-                print(f"   ✅ Ses dosyası kaydedildi: {file_path}")
-                
-                recorded_files_for_item.append(str(file_path.absolute()))
-                metadata.append({
-                    "file_path": str(file_path.absolute()),
-                    "transcription": item,
-                    "repetition": rep_num
-                })
+                if recorded_file:
+                    # Ses kalitesi kontrolü
+                    from src.utils.utils import calculate_audio_quality, play_audio
+                    quality_info = calculate_audio_quality(recorded_file)
+                    
+                    # Kalite bilgilerini göster
+                    print(f"   📊 Kalite Skoru: {quality_info['quality_score']:.1f}/100")
+                    print(f"   📊 RMS: {quality_info['rms']:.0f}, SNR: {quality_info['snr_db']:.1f}dB, Süre: {quality_info['duration']:.2f}s")
+                    
+                    # Kalite kontrolü ve yeniden kayıt önerisi
+                    should_rerecord = False
+                    if not quality_info['is_valid']:
+                        print(f"   ⚠️  Düşük kalite tespit edildi (skor: {quality_info['quality_score']:.1f} < {config.QUALITY_THRESHOLD})")
+                        if config.AUTO_RERECORD_ENABLED:
+                            should_rerecord = True
+                    
+                    # Kayıt önizleme seçeneği
+                    if quality_info['is_valid'] or not config.AUTO_RERECORD_ENABLED:
+                        preview = input("   🎧 Kaydı dinlemek ister misiniz? (e/h): ").strip().lower()
+                        if preview == 'e':
+                            print("   ▶️  Kayıt oynatılıyor...")
+                            play_audio(recorded_file)
+                            keep_recording = input("   💾 Bu kaydı tutmak ister misiniz? (e/h): ").strip().lower()
+                            if keep_recording != 'e':
+                                should_rerecord = True
+                                os.remove(recorded_file)  # Kötü kaydı sil
+                                print("   🗑️  Kayıt silindi.")
+                    
+                    # Yeniden kayıt gerekli mi?
+                    if should_rerecord:
+                        print(f"   🔄 Yeniden kayıt yapılıyor...")
+                        retry_count = 0
+                        max_retries = 2
+                        
+                        while retry_count < max_retries:
+                            retry_file = record_audio(file_path=str(file_path), record_seconds=record_duration)
+                            if retry_file:
+                                retry_quality = calculate_audio_quality(retry_file)
+                                print(f"   📊 Yeni Kalite Skoru: {retry_quality['quality_score']:.1f}/100")
+                                
+                                if retry_quality['quality_score'] > quality_info['quality_score']:
+                                    quality_info = retry_quality
+                                    recorded_file = retry_file
+                                    print(f"   ✅ Daha iyi kalite elde edildi!")
+                                    break
+                                else:
+                                    retry_count += 1
+                                    if retry_count < max_retries:
+                                        print(f"   ⚠️  Kalite iyileşmedi. Tekrar denenecek...")
+                                    else:
+                                        print(f"   ⚠️  Maksimum deneme sayısına ulaşıldı. Mevcut kayıt kullanılacak.")
+                            else:
+                                retry_count += 1
+                    
+                    # Path normalizasyonu (cross-platform uyumluluk için)
+                    # Relative path kullan (Mac'te kayıt, Linux'ta eğitim için)
+                    relative_file_path = normalize_path_for_cross_platform(str(file_path.absolute()), save_path.parent)
+                    
+                    # Başarılı kayıt
+                    if quality_info['is_valid'] or not config.AUTO_RERECORD_ENABLED:
+                        print(f"   ✅ Ses dosyası kaydedildi: {file_path.name}")
+                        print(f"   📁 Relative Path: {relative_file_path}")
+                        recorded_files_for_item.append(str(file_path.absolute()))
+                        durations_for_item.append(quality_info['duration'])
+                        metadata.append({
+                            "file_path": relative_file_path,  # Relative path kullan
+                            "transcription": item,
+                            "repetition": rep_num,
+                            "quality_score": quality_info['quality_score'],
+                            "rms": quality_info['rms'],
+                            "snr_db": quality_info['snr_db'],
+                            "duration": quality_info['duration']
+                        })
+                        stats["successful_recordings"] += 1
+                        stats["quality_scores"].append(quality_info['quality_score'])
+                    else:
+                        print(f"   ⚠️  Kayıt düşük kalitede ama kaydedildi: {file_path.name}")
+                        print(f"   📁 Relative Path: {relative_file_path}")
+                        recorded_files_for_item.append(str(file_path.absolute()))
+                        durations_for_item.append(quality_info['duration'])
+                        metadata.append({
+                            "file_path": relative_file_path,  # Relative path kullan
+                            "transcription": item,
+                            "repetition": rep_num,
+                            "quality_score": quality_info['quality_score'],
+                            "rms": quality_info['rms'],
+                            "snr_db": quality_info['snr_db'],
+                            "duration": quality_info['duration']
+                        })
+                        stats["successful_recordings"] += 1
+                        stats["quality_scores"].append(quality_info['quality_score'])
+                    
+                    # Her tekrar sonrası ilerleme göster
+                    current_item_total = current_rep_count + len(recorded_files_for_item)
+                    item_progress = f"{current_item_total}/{config.IDEAL_REPETITIONS}"
+                    # Toplam kayıt hesaplama (her item için IDEAL_REPETITIONS kadar)
+                    total_expected = len(items_to_record_new) * config.IDEAL_REPETITIONS
+                    overall_progress = stats["successful_recordings"] / total_expected * 100 if total_expected > 0 else 0
+                    print(f"   📊 İlerleme: '{item}' {item_progress} | Genel: {stats['successful_recordings']}/{total_expected} kayıt ({overall_progress:.1f}%)")
+                    
+                    # Tutarlılık kontrolü (2 veya daha fazla kayıt varsa)
+                    if len(durations_for_item) >= 2 and config.CONSISTENCY_CHECK_ENABLED:
+                        from src.utils.utils import check_consistency
+                        consistency_info = check_consistency(durations_for_item, config.CONSISTENCY_TOLERANCE)
+                        
+                        if not consistency_info['is_consistent']:
+                            print(f"   ⚠️  Tutarlılık Uyarısı: Süre farkı {consistency_info['max_diff']:.2f}s (tolerans: {consistency_info['tolerance']:.2f}s)")
+                            print(f"   💡 Ortalama süre: {consistency_info['avg_duration']:.2f}s, Standart sapma: {consistency_info['std_deviation']:.2f}s")
+                            print(f"   💡 Sonraki kayıtlarda {consistency_info['avg_duration']:.2f}s civarında söylemeye çalışın.")
+                        else:
+                            print(f"   ✅ Tutarlılık: Tüm kayıtlar benzer sürede ({consistency_info['avg_duration']:.2f}s ± {consistency_info['std_deviation']:.2f}s)")
+                    
+                    if should_rerecord:
+                        stats["rerecorded"] += 1
+                    stats["total_recordings"] += 1
+                else:
+                    print(f"   ❌ Ses kaydı başarısız oldu veya ses algılanmadı.")
+                    stats["failed_recordings"] += 1
+                    stats["total_recordings"] += 1
             
 
 
+            # Item tamamlandı kontrolü
+            total_reps_for_item = current_rep_count + len(recorded_files_for_item)
+            if total_reps_for_item >= config.IDEAL_REPETITIONS:
+                stats["items_completed"] += 1
+                print(f"\n   ✅ '{item}' tamamlandı! ({total_reps_for_item}/{config.IDEAL_REPETITIONS} kayıt) | ({stats['items_completed']}/{stats['items_total']} {item_type})")
+            
             if quit_session:
-                print("\nKullanıcı isteğiyle oturum sonlandırılıyor...")
+                print("\n" + "="*70)
+                print("⏸️  Kullanıcı isteğiyle oturum sonlandırılıyor...")
+                print("="*70)
                 break
         
         if not quit_session:
-            print("\n" + "="*50)
+            print("\n" + "="*70)
             print(f"🎉 {item_type.capitalize()} toplama işlemi başarıyla tamamlandı!")
+            print("="*70)
+            
+            # Detaylı istatistikleri göster
+            if stats["total_recordings"] > 0:
+                if stats["quality_scores"]:
+                    stats["avg_quality_score"] = sum(stats["quality_scores"]) / len(stats["quality_scores"])
+                
+                print(f"\n📊 DETAYLI OTURUM İSTATİSTİKLERİ")
+                print("="*70)
+                print(f"   📝 Kaynak Dosya: {len(items_to_record)} {item_type}")
+                print(f"   ✅ Tamamlanan: {stats['items_completed']}/{stats['items_total']} {item_type}")
+                print(f"   📦 Toplam Kayıt: {stats['total_recordings']}")
+                print(f"   ✅ Başarılı: {stats['successful_recordings']}")
+                print(f"   ❌ Başarısız: {stats['failed_recordings']}")
+                print(f"   🔄 Yeniden Kayıt: {stats['rerecorded']}")
+                if stats["avg_quality_score"] > 0:
+                    print(f"   ⭐ Ortalama Kalite Skoru: {stats['avg_quality_score']:.1f}/100")
+                print(f"   📂 Kayıt Dizini: {save_path.absolute()}")
+                print(f"   📄 Metadata Dosyası: {metadata_path.absolute()}")
+                print("="*70)
 
     finally:
         if metadata:
@@ -207,6 +477,18 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
             updated_df.to_csv(metadata_path, index=False, encoding='utf-8')
             
             print(f"✅ Metadata dosyanız güncellendi: {metadata_path}")
+            
+            # Create recording report
+            stats["recorded_items"] = stats["items_completed"]
+            stats["skipped_items"] = stats["items_total"] - stats["items_completed"]
+            stats["total_items"] = len(items_to_record)
+            
+            report_file = reporting_service.log_recording_session(
+                user_id=user_id,
+                record_type=item_type,
+                stats=stats
+            )
+            print(f"\n📊 Recording report saved: {report_file}")
         else:
             print("\n🛑 Kayıt durduruldu. Yazılacak yeni veri bulunmuyor.")
 
@@ -276,7 +558,7 @@ def main():
     elif choice == '2':
         record_type = "kelime"
         sets_dir = "datasets/words_set"
-        repetitions = 5
+        repetitions = config.IDEAL_REPETITIONS  # Konuşma bozukluğu için ideal tekrar sayısı
     else:
         record_type = "harf"
         sets_dir = "datasets/letters_set"
