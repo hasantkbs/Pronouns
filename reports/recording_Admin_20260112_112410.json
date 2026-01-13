@@ -1,0 +1,26 @@
+{
+  "report_id": "recording_Admin_20260112_112410",
+  "operation_type": "recording",
+  "user_id": "Admin",
+  "timestamp": "2026-01-12T11:24:10.166423",
+  "date": "2026-01-12",
+  "time": "11:24:10",
+  "data": {
+    "record_type": "kelime",
+    "statistics": {
+      "total_items": 22045,
+      "recorded_items": 0,
+      "skipped_items": 22045,
+      "total_recordings": 2,
+      "successful_recordings": 2,
+      "failed_recordings": 0,
+      "average_quality_score": 0.0,
+      "items_completed": 0
+    },
+    "settings": {
+      "ideal_repetitions": 10,
+      "record_duration": 4,
+      "quality_threshold": 40
+    }
+  }
+}

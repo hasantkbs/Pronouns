@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 import config
 from src.data.repository import UserDataRepository
-from src.utils.utils import record_audio, calculate_audio_quality, play_audio, check_consistency
+from src.utils.utils import record_audio, calculate_audio_quality, play_audio, check_consistency, normalize_path_for_cross_platform
 from src.constants import (
     RECORD_TYPE_WORD, RECORD_TYPE_SENTENCE, RECORD_TYPE_LETTER,
     DEFAULT_REPETITIONS

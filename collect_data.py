@@ -20,7 +20,7 @@ import platform
 
 # Add project root to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from src.utils.utils import record_audio, calculate_audio_quality, play_audio, check_consistency
+from src.utils.utils import record_audio, calculate_audio_quality, play_audio, check_consistency, normalize_path_for_cross_platform
 from src.services.recording_service import RecordingService
 from src.services.model_service import ModelService
 from src.services.reporting_service import ReportingService
@@ -298,7 +298,6 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
                 
                 if recorded_file:
                     # Ses kalitesi kontrolü
-                    from src.utils.utils import calculate_audio_quality, play_audio
                     quality_info = calculate_audio_quality(recorded_file)
                     
                     # Kalite bilgilerini göster
@@ -398,7 +397,6 @@ def run_recording_session(user_id, items_to_record, save_path, metadata_path, it
                     
                     # Tutarlılık kontrolü (2 veya daha fazla kayıt varsa)
                     if len(durations_for_item) >= 2 and config.CONSISTENCY_CHECK_ENABLED:
-                        from src.utils.utils import check_consistency
                         consistency_info = check_consistency(durations_for_item, config.CONSISTENCY_TOLERANCE)
                         
                         if not consistency_info['is_consistent']:

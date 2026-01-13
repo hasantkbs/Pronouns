@@ -1,7 +1,6 @@
-file_path,transcription,repetition
-/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/data/users/Admin/words/Admin_kelime_1_rep1.wav,şaşkınlığınızı,1
-/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/data/users/Admin/words/Admin_kelime_1_rep2.wav,şaşkınlığınızı,2
-/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/data/users/Admin/words/Admin_kelime_1_rep3.wav,şaşkınlığınızı,3
-/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/data/users/Admin/words/Admin_kelime_1_rep1.wav,şaşkınlığınızı,1
-/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/data/users/Admin/words/Admin_kelime_1_rep2.wav,şaşkınlığınızı,2
-/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/data/users/Admin/words/Admin_kelime_1_rep3.wav,şaşkınlığınızı,3
+file_path,transcription,repetition,quality_score,rms,snr_db,duration
+/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/data/users/Admin/words/Admin_kelime_1_rep1.wav,şaşkınlığınızı,1,,,,
+/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/data/users/Admin/words/Admin_kelime_1_rep2.wav,şaşkınlığınızı,2,,,,
+/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/data/users/Admin/words/Admin_kelime_1_rep3.wav,şaşkınlığınızı,3,,,,
+/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/data/users/Admin/words/Bir/rep1.wav,Bir,1,95.0,401.1438903808594,10.235886573791504,4.544
+/Users/hasantekbas/Downloads/Algorix Project Doc/Fikret Bey /Pronouns/data/users/Admin/words/Bir/rep2.wav,Bir,2,95.0,376.950439453125,9.552873373031616,6.336

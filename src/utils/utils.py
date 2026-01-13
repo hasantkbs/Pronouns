@@ -6,8 +6,10 @@ import threading
 import time
 import sys
 import os
+from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import config
+
 
 # --- Ses Kayıt Fonksiyonu ---
 
@@ -309,6 +311,19 @@ def save_model(model, processor, path: str):
     model.save_pretrained(path)
     processor.save_pretrained(path)
     print(f"✅ Model saved to {path}")
+
+def normalize_path_for_cross_platform(file_path: str, base_path: Path) -> str:
+    """Cross-platform path normalizasyonu"""
+    file_path_obj = Path(file_path)
+    
+    if file_path_obj.is_absolute():
+        try:
+            relative_path = file_path_obj.relative_to(base_path)
+            return str(relative_path)
+        except ValueError:
+            return str(file_path_obj)
+    
+    return str(file_path_obj)
 
 if __name__ == '__main__':
     print("🎧 Ses Kayıt Testi")
