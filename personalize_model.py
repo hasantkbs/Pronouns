@@ -19,8 +19,9 @@ from tqdm import tqdm
 import config
 import librosa
 import soundfile as sf
-from datasets import Dataset, Audio
+from datasets import Dataset, Audio, load_metric
 from src.utils.utils import save_model
+from sklearn.model_selection import train_test_split
 
 
 @dataclasses.dataclass
@@ -28,8 +29,6 @@ class DataCollatorSpeechSeq2SeqWithPadding:
     processor: any
 
     def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
-        # split inputs and labels since they have to be of different lengths and need
-        # different padding methods
         input_features = [{"input_features": feature["input_features"]} for feature in features]
         label_features = [{"input_ids": feature["labels"]} for feature in features]
 
@@ -37,11 +36,8 @@ class DataCollatorSpeechSeq2SeqWithPadding:
 
         labels_batch = self.processor.tokenizer.pad(label_features, return_tensors="pt")
 
-        # replace padding with -100 to ignore loss correctly
         labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
 
-        # if bos token is appended in previous tokenization step,
-        # cut bos token here as it's append later anyways
         if (labels[:, 0] == self.processor.tokenizer.bos_token_id).all().cpu().item():
             labels = labels[:, 1:]
 
@@ -54,7 +50,7 @@ class PersonalizedTrainer:
     
     def __init__(self, user_id, base_model_path=None):
         self.user_id = user_id
-        self.base_model_path = base_model_path or "openai/whisper-large-v2" # Default Whisper large model
+        self.base_model_path = base_model_path or "openai/whisper-large-v2"
         self.user_data_path = Path(config.BASE_PATH) / self.user_id
         self.output_dir = Path("data/models/personalized_models") / self.user_id
         self.adapter_name = "user_adapter"
@@ -62,6 +58,7 @@ class PersonalizedTrainer:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.processor = None
         self.model = None
+        self.wer_metric = load_metric("wer")
 
     def run(self):
         """Kişiselleştirme sürecini başlatır."""
@@ -70,12 +67,17 @@ class PersonalizedTrainer:
         
         if not self.user_data_path.exists() or not (self.user_data_path / "metadata_words.csv").exists():
             print(f"❌ Hata: {self.user_data_path} için veri bulunamadı.")
-            print(f"Lütfen önce 'src/training/collect_user_data.py' scriptini çalıştırın.")
             return
 
         self.load_model_and_processor()
-        dataset = self.prepare_dataset()
-        self.train_model(dataset)
+        
+        df = pd.read_csv(self.user_data_path / "metadata_words.csv")
+        train_df, eval_df = train_test_split(df, test_size=0.2, random_state=42)
+        
+        train_dataset = self.prepare_dataset(train_df)
+        eval_dataset = self.prepare_dataset(eval_df)
+        
+        self.train_model(train_dataset, eval_dataset)
 
     def load_model_and_processor(self):
         """Temel model ve işlemciyi yükler."""
@@ -85,25 +87,23 @@ class PersonalizedTrainer:
         self.model.to(self.device)
         peft_config = LoraConfig(
             r=config.ADAPTER_REDUCTION_FACTOR,
-            lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2, # A common heuristic
-            target_modules=["q_proj", "v_proj", "k_proj"], # Common target modules for Whisper
-            lora_dropout=0.1, # Example dropout
+            lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2,
+            target_modules=["q_proj", "v_proj", "k_proj"],
+            lora_dropout=0.1,
             bias="none",
         )
         self.model = get_peft_model(self.model, peft_config)
         print(f"✅ Model yüklendi. Cihaz: {self.device}")
 
-    def prepare_dataset(self):
+    def prepare_dataset(self, df):
         """Kullanıcıya özel veri setini hazırlar."""
-        print(f"📊 Veri seti hazırlanıyor: {self.user_data_path}")
-        metadata_path = self.user_data_path / "metadata_words.csv"
-        df = pd.read_csv(metadata_path)
+        print(f"📊 Veri seti hazırlanıyor...")
 
         def audio_loader(path):
             filename = os.path.basename(path)
-            filepath = self.user_data_path / "words" / filename # Use self.user_data_path
+            filepath = self.user_data_path / "words" / filename
             try:
-                speech, sample_rate = librosa.load(filepath, sr=config.ORNEKLEME_ORANI)
+                speech, _ = librosa.load(filepath, sr=config.ORNEKLEME_ORANI)
                 return speech
             except FileNotFoundError:
                 print(f"⚠️  Uyarı: Ses dosyası bulunamadı, atlanıyor: {filepath}")
@@ -113,7 +113,6 @@ class PersonalizedTrainer:
                 return None
 
         df["audio"] = df["file_path"].apply(audio_loader)
-        # Remove rows where audio loading failed
         df = df.dropna(subset=["audio"])
         
         dataset = Dataset.from_pandas(df)
@@ -131,74 +130,74 @@ class PersonalizedTrainer:
 
         return model_inputs
 
-    def train_model(self, dataset):
-        """Modeli, transformers.Trainer kullanmadan manuel bir PyTorch döngüsü ile eğitir."""
-        print("🚀 Kişiselleştirilmiş model eğitimi başlıyor... (Manuel Döngü)")
+    def compute_metrics(self, pred):
+        pred_ids = pred.predictions
+        label_ids = pred.label_ids
+        label_ids[label_ids == -100] = self.processor.tokenizer.pad_token_id
+        pred_str = self.processor.batch_decode(pred_ids, skip_special_tokens=True)
+        label_str = self.processor.batch_decode(label_ids, skip_special_tokens=True)
+        wer = self.wer_metric.compute(predictions=pred_str, references=label_str)
+        return {"wer": wer}
 
-        # 1. Veri Setini Hazırla
-        processed_dataset = dataset.map(
+    def train_model(self, train_dataset, eval_dataset):
+        """Modeli, transformers.Trainer kullanarak eğitir."""
+        print("🚀 Kişiselleştirilmiş model eğitimi başlıyor...")
+
+        processed_train_dataset = train_dataset.map(
             self.preprocess_function,
-            remove_columns=dataset.column_names,
+            remove_columns=train_dataset.column_names,
+            batched=True,
+            batch_size=config.FINETUNE_BATCH_SIZE
+        )
+        processed_eval_dataset = eval_dataset.map(
+            self.preprocess_function,
+            remove_columns=eval_dataset.column_names,
             batched=True,
             batch_size=config.FINETUNE_BATCH_SIZE
         )
 
         data_collator = DataCollatorSpeechSeq2SeqWithPadding(processor=self.processor)
 
-        dataloader = DataLoader(
-            processed_dataset,
-            batch_size=config.FINETUNE_BATCH_SIZE,
-            collate_fn=data_collator
+        training_args = TrainingArguments(
+            output_dir=self.output_dir,
+            per_device_train_batch_size=config.FINETUNE_BATCH_SIZE,
+            gradient_accumulation_steps=config.GRADIENT_ACCUMULATION_STEPS,
+            learning_rate=config.FINETUNE_LEARNING_RATE,
+            warmup_steps=50,
+            num_train_epochs=config.NUM_FINETUNE_EPOCHS,
+            evaluation_strategy="epoch",
+            save_strategy="epoch",
+            logging_strategy="epoch",
+            load_best_model_at_end=True,
+            metric_for_best_model="wer",
+            greater_is_better=False,
+            fp16=torch.cuda.is_available(),
+            run_name=f"personalize-{self.user_id}",
         )
 
-        # 2. Optimizasyon ve Hızlandırıcı (Accelerator) Ayarları
-        optimizer = AdamW(self.model.parameters(), lr=config.FINETUNE_LEARNING_RATE)
+        trainer = Trainer(
+            model=self.model,
+            args=training_args,
+            train_dataset=processed_train_dataset,
+            eval_dataset=processed_eval_dataset,
+            data_collator=data_collator,
+            compute_metrics=self.compute_metrics,
+            tokenizer=self.processor.feature_extractor,
+        )
+
+        trainer.train()
         
-        accelerator = Accelerator(
-            mixed_precision="fp16" if torch.cuda.is_available() else "no",
-            gradient_accumulation_steps=config.GRADIENT_ACCUMULATION_STEPS
-        )
-        
-        self.model, optimizer, dataloader = accelerator.prepare(
-            self.model, optimizer, dataloader
-        )
-
-        num_epochs = config.NUM_FINETUNE_EPOCHS
-        num_training_steps = num_epochs * len(dataloader)
-        progress_bar = tqdm(range(num_training_steps))
-
-        # 3. Eğitim Döngüsü
-        self.model.train()
-        for epoch in range(num_epochs):
-            for step, batch in enumerate(dataloader):
-                with accelerator.accumulate(self.model):
-                    # Forward pass
-                    outputs = self.model(**batch)
-                    loss = outputs.loss
-                    
-                    # Backward pass
-                    accelerator.backward(loss)
-                    
-                    optimizer.step()
-                    optimizer.zero_grad()
-                
-                progress_bar.update(1)
-                progress_bar.set_description(f"Epoch {epoch+1}/{num_epochs} | Loss: {loss.item():.4f}")
-
-        # 4. Modeli Kaydet
         print("\n✅ Model ince ayarı tamamlandı!")
         
-        # Modeli unwrapping işlemi ve kaydetme
-        unwrapped_model = accelerator.unwrap_model(self.model)
+        unwrapped_model = self.model
         save_model(unwrapped_model, self.processor, str(self.output_dir))
 
         print(f"💾 Kişiselleştirilmiş model kaydedildi: {self.output_dir}")
-        print("\nKullanım için app.py veya config.py dosyasını bu yeni model yolunu kullanacak şekilde güncelleyebilirsiniz.")
 
 def main():
     parser = argparse.ArgumentParser(description="Kullanıcıya özel ASR modelini eğitir.")
     parser.add_argument("user_id", type=str, help="Verisi kullanılacak ve modeli kişiselleştirilecek kullanıcının kimliği.")
-    parser.add_argument("--base_model", type=str, help="İnce ayar için kullanılacak temel modelin yolu. Varsayılan: config.py'deki model.", default=None)
+    parser.add_argument("--base_model", type=str, help="İnce ayar için kullanılacak temel modelin yolu.", default=None)
     
     args = parser.parse_args()
     

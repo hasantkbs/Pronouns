@@ -24,4 +24,4 @@ torchvision
 tqdm
 transformers==4.29.2
 tokenizers
-jiwer
+jiwerscikit-learn
