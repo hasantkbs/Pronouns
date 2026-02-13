@@ -1,0 +1,26 @@
+{
+  "report_id": "recording_FurkanV1_20260213_105155",
+  "operation_type": "recording",
+  "user_id": "FurkanV1",
+  "timestamp": "2026-02-13T10:51:55.596885",
+  "date": "2026-02-13",
+  "time": "10:51:55",
+  "data": {
+    "record_type": "kelime",
+    "statistics": {
+      "total_items": 22045,
+      "recorded_items": 51,
+      "skipped_items": 8136,
+      "total_recordings": 501,
+      "successful_recordings": 501,
+      "failed_recordings": 0,
+      "average_quality_score": 0.0,
+      "items_completed": 51
+    },
+    "settings": {
+      "ideal_repetitions": 10,
+      "record_duration": 4,
+      "quality_threshold": 40
+    }
+  }
+}
