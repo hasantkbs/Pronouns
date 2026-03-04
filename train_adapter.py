@@ -104,21 +104,35 @@ class DataCollatorCTCWithPadding:
 def build_augment_pipeline(sampling_rate: int):
     """
     Konuşma bozukluğu için optimize edilmiş augmentation pipeline.
-    Hafif augmentation kullanır (aşırı distortion'dan kaçınır).
+    Parametreler config.py üzerinden kontrol edilir; hafif bozulma kullanılır
+    böylece bozukluk kalıpları korunur.
     """
     if not AUDIOMENTATIONS_AVAILABLE:
         return None
-    
+
     return A.Compose([
-        # Hafif gürültü ekleme (konuşma bozukluğu için düşük seviye)
-        A.AddGaussianNoise(min_amplitude=0.0005, max_amplitude=0.005, p=0.3),
-        # Zaman esnetme (konuşma hızı varyasyonu)
-        A.TimeStretch(min_rate=0.9, max_rate=1.1, p=0.3, leave_length_unchanged=False),
-        # Pitch değişimi (hafif, konuşma bozukluğu için)
-        A.PitchShift(min_semitones=-2, max_semitones=2, p=0.3),
-        # Zaman maskesi (küçük bölümler)
-        A.TimeMask(min_band_part=0.03, max_band_part=0.1, p=0.2),
-    ], p=0.6)  # %60 ihtimalle augmentation uygula
+        A.AddGaussianNoise(
+            min_amplitude=config.AUGMENT_NOISE_MIN,
+            max_amplitude=config.AUGMENT_NOISE_MAX,
+            p=0.3,
+        ),
+        A.TimeStretch(
+            min_rate=config.AUGMENT_TIME_STRETCH_MIN,
+            max_rate=config.AUGMENT_TIME_STRETCH_MAX,
+            p=0.3,
+            leave_length_unchanged=False,
+        ),
+        A.PitchShift(
+            min_semitones=config.AUGMENT_PITCH_MIN,
+            max_semitones=config.AUGMENT_PITCH_MAX,
+            p=0.3,
+        ),
+        A.TimeMask(
+            min_band_part=config.AUGMENT_TIME_MASK_MIN,
+            max_band_part=config.AUGMENT_TIME_MASK_MAX,
+            p=0.2,
+        ),
+    ], p=config.AUGMENT_PROBABILITY)
 
 def _standalone_preprocess_function(examples, processor, augmenter=None):
     """
@@ -245,6 +259,7 @@ class PersonalizedTrainer:
         self.wer_metric = evaluate.load("wer")
         self.cer_metric = evaluate.load("cer")
         self.best_val_loss = float('inf')
+        self.best_val_wer = float('inf')   # WER-bazlı en iyi model seçimi için
         self.patience_counter = 0
         self.checkpoint_dir = self.output_dir / "checkpoints"
 
@@ -313,16 +328,18 @@ class PersonalizedTrainer:
         
         self.model.to(self.device)
         
-        # Konuşma bozukluğu için optimize edilmiş LoRA konfigürasyonu
-        # Daha fazla modül ve daha yüksek rank kullanıyoruz
-        # Not: PEFT otomatik olarak Wav2Vec2ForCTC model tipini algılar, task_type gerekmez
+        # Konuşma bozukluğu için optimize edilmiş LoRA konfigürasyonu.
+        # Attention projeksiyon katmanlarına ek olarak feed-forward yoğun katmanlar
+        # da dahil edilerek modelin konuşma bozukluğu kalıplarını öğrenme kapasitesi artırıldı.
         peft_config = LoraConfig(
-            r=config.ADAPTER_REDUCTION_FACTOR,
+            r=config.ADAPTER_REDUCTION_FACTOR,            # rank=16; daha yüksek -> daha iyi uyum
             lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2,
-            target_modules=["q_proj", "v_proj", "k_proj", "out_proj"],  # Daha fazla modül
-            lora_dropout=0.05,  # Daha düşük dropout (overfitting riski düşük)
+            target_modules=[
+                "q_proj", "v_proj", "k_proj", "out_proj",   # Attention katmanları
+                "intermediate_dense", "output_dense",         # Feed-forward katmanları
+            ],
+            lora_dropout=0.05,
             bias="none",
-            # task_type parametresi kaldırıldı - PEFT otomatik algılar
         )
         self.model = get_peft_model(self.model, peft_config)
         
@@ -379,19 +396,27 @@ class PersonalizedTrainer:
                 # Son %20'yi validation için al
                 df = df.tail(int(len(df) * 0.2))
 
-        # Dosya yollarını düzelt
-        words_dir = self.user_data_path / "words"
-        def fix_file_path(path):
-            filename = os.path.basename(str(path))
-            return str(words_dir / filename)
-        
-        df["file_path"] = df["file_path"].apply(fix_file_path)
+        # Dosya yollarını platforma göre çöz
+        # Windows'ta kaydedilen \, Linux/macOS'ta / olan yollar aynı şekilde işlenir.
+        from src.utils.utils import resolve_audio_path
+        user_base = self.user_data_path
+        df["file_path"] = df["file_path"].apply(
+            lambda p: resolve_audio_path(p, user_base)
+        )
         
         # Var olmayan dosyaları filtrele
         original_size = len(df)
         df = df[df["file_path"].apply(os.path.exists)]
         if len(df) < original_size:
-            print(f"   ⚠️  {original_size - len(df)} adet bulunamayan ses dosyası atlandı.")
+            print(f"   {original_size - len(df)} adet bulunamayan ses dosyası atlandı.")
+
+        # Kalite skoru filtrelemesi (eğer sütun mevcutsa)
+        if "quality_score" in df.columns:
+            before = len(df)
+            df = df[df["quality_score"] >= config.QUALITY_THRESHOLD]
+            removed = before - len(df)
+            if removed > 0:
+                print(f"   {removed} adet düşük kaliteli kayıt filtrelendi (eşik: {config.QUALITY_THRESHOLD}).")
         
         if len(df) == 0:
             if split == 'eval':
@@ -557,15 +582,25 @@ class PersonalizedTrainer:
             weight_decay=config.WEIGHT_DECAY
         )
         
-        # Learning rate scheduler (linear warmup)
+        # Learning rate scheduler (cosine veya linear; config.LR_SCHEDULER_TYPE ile seçilir)
         num_training_steps = config.NUM_FINETUNE_EPOCHS * len(train_dataloader)
         warmup_steps = config.WARMUP_STEPS
-        from transformers import get_linear_schedule_with_warmup
-        scheduler = get_linear_schedule_with_warmup(
-            optimizer,
-            num_warmup_steps=warmup_steps,
-            num_training_steps=num_training_steps
-        )
+        scheduler_type = getattr(config, "LR_SCHEDULER_TYPE", "cosine")
+        if scheduler_type == "cosine":
+            from transformers import get_cosine_schedule_with_warmup
+            scheduler = get_cosine_schedule_with_warmup(
+                optimizer,
+                num_warmup_steps=warmup_steps,
+                num_training_steps=num_training_steps,
+            )
+        else:
+            from transformers import get_linear_schedule_with_warmup
+            scheduler = get_linear_schedule_with_warmup(
+                optimizer,
+                num_warmup_steps=warmup_steps,
+                num_training_steps=num_training_steps,
+            )
+        print(f"   LR Scheduler: {scheduler_type}")
         
         # Accelerator (RTX A5000 için optimize edilmiş ayarlar)
         mixed_precision_mode = config.MIXED_PRECISION if torch.cuda.is_available() else "no"
@@ -661,23 +696,23 @@ class PersonalizedTrainer:
                     # Validation (belirli adımlarda)
                     if eval_dataloader is not None and global_step % config.FINETUNE_EVAL_STEPS == 0:
                         val_loss, wer, cer = self.evaluate_model(eval_dataloader, accelerator)
-                        print(f"\n   📊 Validation (Step {global_step}):")
+                        print(f"\n   Validation (Step {global_step}):")
                         print(f"      Loss: {val_loss:.4f} | WER: {wer:.4f} ({wer*100:.2f}%) | CER: {cer:.4f} ({cer*100:.2f}%)")
-                        
-                        # Early stopping kontrolü
-                        if val_loss < self.best_val_loss:
+
+                        # WER-bazlı en iyi model seçimi ve early stopping
+                        if wer < self.best_val_wer:
+                            self.best_val_wer = wer
                             self.best_val_loss = val_loss
                             self.patience_counter = 0
-                            # Best model'i kaydet
                             unwrapped_model = accelerator.unwrap_model(self.model)
                             best_checkpoint = self.checkpoint_dir / "best_model"
                             save_model_and_processor(unwrapped_model, self.processor, str(best_checkpoint))
-                            print(f"      ✅ Yeni en iyi model kaydedildi! (Loss: {val_loss:.4f})")
+                            print(f"      En iyi model kaydedildi! (WER: {wer*100:.2f}%)")
                         else:
                             self.patience_counter += 1
                             if self.patience_counter >= config.EARLY_STOPPING_PATIENCE:
-                                print(f"\n   ⏹️  Early stopping tetiklendi! (Patience: {config.EARLY_STOPPING_PATIENCE})")
-                                print(f"      En iyi validation loss: {self.best_val_loss:.4f}")
+                                print(f"\n   Early stopping tetiklendi! (Patience: {config.EARLY_STOPPING_PATIENCE})")
+                                print(f"      En iyi WER: {self.best_val_wer*100:.2f}%")
                                 self.early_stopped = True
                                 break
                 
@@ -689,10 +724,20 @@ class PersonalizedTrainer:
                 # Epoch sonunda validation
                 if eval_dataloader is not None:
                     val_loss, wer, cer = self.evaluate_model(eval_dataloader, accelerator)
-                    print(f"   📊 Epoch sonu Validation:")
+                    print(f"   Epoch sonu Validation:")
                     print(f"      Loss: {val_loss:.4f} | WER: {wer:.4f} ({wer*100:.2f}%) | CER: {cer:.4f} ({cer*100:.2f}%)")
-                    
-                    # Track best metrics
+
+                    if wer < self.best_val_wer:
+                        self.best_val_wer = wer
+                        self.best_val_loss = val_loss
+                        self.patience_counter = 0
+                        unwrapped_model = accelerator.unwrap_model(self.model)
+                        best_checkpoint = self.checkpoint_dir / "best_model"
+                        save_model_and_processor(unwrapped_model, self.processor, str(best_checkpoint))
+                        print(f"      En iyi model kaydedildi! (WER: {wer*100:.2f}%)")
+                    else:
+                        self.patience_counter += 1
+
                     if wer < self.best_wer:
                         self.best_wer = wer
                     if cer < self.best_cer:

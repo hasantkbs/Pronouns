@@ -3,60 +3,106 @@
 
 class NLU_System:
     """
-    Metin girdisini analiz ederek kullanıcının niyetini (intent) ve 
+    Metin girdisini analiz ederek kullanıcının niyetini (intent) ve
     parametrelerini (entities) anlayan sistem.
+    Türkçe günlük konuşma ve sistem komutları için genişletilmiş kural seti.
     """
+
     def __init__(self):
-        print("NLU Sistemi başlatılıyor...")
-        # Niyet kurallarını yeniden yapılandır - Türkçe günlük konuşma için genişletildi
+        print("NLU Sistemi baslatiliyor...")
         self.intent_rules = {
-            # Günlük selamlaşma ve sohbet
-            'greeting': {
-                'keywords': ['merhaba', 'selam', 'hey', 'hi', 'hello'],
-                'priority': 1
+
+            # --- Karsilasma ve sohbet ---
+            "greeting": {
+                "keywords": ["merhaba", "selam", "hey", "hi", "hello", "günaydın", "iyi günler", "iyi aksamlar"],
+                "priority": 1,
             },
-            'how_are_you': {
-                'keywords': ['naber', 'nasılsın', 'nasıl gidiyor', 'iyi misin'],
-                'priority': 2
+            "how_are_you": {
+                "keywords": ["naber", "nasılsın", "nasil gidiyor", "iyi misin", "ne haber", "nasılsınız"],
+                "priority": 2,
             },
-            'what_are_you_doing': {
-                'keywords': ['ne yapıyorsun', 'ne yapıyorsunuz', 'ne yapıyorsun bu gün', 'bugün ne yapıyorsun'],
-                'priority': 2
+            "farewell": {
+                "keywords": ["hoşça kal", "görüşürüz", "güle güle", "iyi geceler", "iyi aksamlar", "bay bay"],
+                "priority": 2,
             },
-            'daily_activity': {
-                'keywords': ['bugün', 'gün', 'yapıyorsun', 'yapıyorsunuz'],
-                'priority': 3
+            "thanks": {
+                "keywords": ["teşekkür", "teşekkürler", "sağol", "sağolun", "eyvallah", "mersi"],
+                "priority": 2,
             },
-            'combined_greeting': {
-                'keywords': ['naber bu gün ne yapıyorsun', 'nasılsın bugün ne yapıyorsun'],
-                'priority': 4
+            "sorry": {
+                "keywords": ["özür", "affedersin", "pardon", "kusura bakma"],
+                "priority": 2,
             },
-            
-            # Sistem komutları
-            'take_note': {
-                'keywords': ['not', 'al'],
-                'entity': {'trigger': 'diye', 'name': 'note_content'},
-                'priority': 1
+            "yes_response": {
+                "keywords": ["evet", "tamam", "olur", "peki", "tabii", "elbette", "kesinlikle"],
+                "priority": 1,
             },
-            'list_files': {
-                'keywords': ['dosya', 'listele'],
-                'priority': 1
+            "no_response": {
+                "keywords": ["hayır", "yok", "olmaz", "istemiyorum", "hayır hayır"],
+                "priority": 1,
             },
-            'show_time': {
-                'keywords': ['saat', 'kaç'],
-                'priority': 1
+
+            # --- Günlük aktivite ---
+            "what_are_you_doing": {
+                "keywords": ["ne yapıyorsun", "ne yapıyorsunuz", "ne yapıyorsun bu gün", "bugün ne yapıyorsun"],
+                "priority": 2,
             },
-            'show_current_directory': {
-                'keywords': ['çalışma', 'dizini'],
-                'priority': 1
+            "daily_activity": {
+                "keywords": ["bugün", "gün", "yapıyorsun", "yapıyorsunuz", "plan", "program"],
+                "priority": 3,
             },
-            'who_are_you': {
-                'keywords': ['kimsin', 'sen kimsin'],
-                'priority': 1
+            "combined_greeting": {
+                "keywords": ["naber bu gün ne yapıyorsun", "nasılsın bugün ne yapıyorsun"],
+                "priority": 4,
             },
-            'exit': {
-                'keywords': ['çık', 'kapat', 'durdur', 'görüşürüz'],
-                'priority': 1
+
+            # --- Sorgulama ---
+            "ask_time": {
+                "keywords": ["saat", "kaç", "saat kaç", "şu an saat"],
+                "priority": 1,
+            },
+            "ask_date": {
+                "keywords": ["tarih", "bugün kaçıncı", "hangi gün", "bugün ne", "gün ay yıl"],
+                "priority": 1,
+            },
+            "ask_weather": {
+                "keywords": ["hava", "hava durumu", "yağmur", "güneş", "sıcaklık", "derece"],
+                "priority": 1,
+            },
+
+            # --- Sistem komutları ---
+            "take_note": {
+                "keywords": ["not", "al", "kaydet", "hatırlat"],
+                "entity": {"trigger": "diye", "name": "note_content"},
+                "priority": 2,
+            },
+            "list_files": {
+                "keywords": ["dosya", "listele", "klasör", "göster", "hangi dosyalar"],
+                "priority": 1,
+            },
+            "show_time": {
+                "keywords": ["saat", "kaç"],
+                "priority": 1,
+            },
+            "show_current_directory": {
+                "keywords": ["çalışma", "dizini", "klasör nerede", "neredeyim"],
+                "priority": 1,
+            },
+            "who_are_you": {
+                "keywords": ["kimsin", "sen kimsin", "adın ne", "adın", "ne yaparsın"],
+                "priority": 1,
+            },
+
+            # --- Yardım ---
+            "help": {
+                "keywords": ["yardım", "yardımcı ol", "nasıl kullanırım", "ne yapabilirim", "komutlar"],
+                "priority": 1,
+            },
+
+            # --- Çıkış ---
+            "exit": {
+                "keywords": ["çık", "kapat", "durdur", "görüşürüz", "kapat programı", "bitir"],
+                "priority": 1,
             },
         }
 
@@ -64,101 +110,79 @@ class NLU_System:
         """
         Verilen metni analiz eder ve niyeti ile parametrelerini döndürür.
 
-        Args:
-            text (str): ASR tarafından üretilmiş metin.
-
-        Returns:
-            tuple[str, dict]: (intent, entities) formatında bir demet.
-                              Örnek: ('take_note', {'note_content': 'yarın toplantı var'})
+        Returns
+        -------
+        tuple[str, dict]
+            (intent, entities) — örnek: ('take_note', {'note_content': 'yarın toplantı'})
         """
-        normalized_text = text.lower().strip()
-        words = normalized_text.split()
-        
-        # Boş metin kontrolü
+        normalized = text.lower().strip()
+        words = normalized.split()
+
         if not words:
-            return 'unknown', {}
-        
-        # En yüksek öncelikli niyeti bul
+            return "unknown", {}
+
         best_intent = None
-        best_score = 0
-        best_entities = {}
-        
+        best_score = 0.0
+        best_entities: dict = {}
+
         for intent, rules in self.intent_rules.items():
-            score = 0
-            priority = rules.get('priority', 1)
-            
-            # Tam cümle eşleşmesi kontrolü (yüksek öncelik)
-            for keyword in rules['keywords']:
-                if keyword in normalized_text:
-                    # Tam cümle eşleşmesi varsa daha yüksek skor ver
-                    if len(keyword.split()) > 1:
-                        score = priority * 2
-                    else:
-                        score = priority
+            score = 0.0
+            priority = rules.get("priority", 1)
+
+            for keyword in rules["keywords"]:
+                if keyword in normalized:
+                    score = priority * 2 if len(keyword.split()) > 1 else float(priority)
                     break
-            
-            # Anahtar kelime eşleşmesi (düşük öncelik)
-            if score == 0:
-                keyword_matches = 0
-                for keyword in rules['keywords']:
-                    if keyword in normalized_text:
-                        keyword_matches += 1
-                
-                if keyword_matches > 0:
-                    score = (keyword_matches / len(rules['keywords'])) * priority
-            
-            if score > 0:
-                # Parametre (entity) çıkarma mantığı
-                entities = {}
-                if 'entity' in rules:
-                    entity_rule = rules['entity']
-                    trigger_word = entity_rule['trigger']
-                    
-                    if trigger_word in words:
-                        trigger_index = words.index(trigger_word)
-                        # Tetikleyici kelimeden sonraki tüm kelimeleri birleştir
-                        entity_value = " ".join(words[trigger_index + 1:])
-                        if entity_value:
-                            entities[entity_rule['name']] = entity_value
-                
-                # Daha yüksek skor varsa güncelle
-                if score > best_score:
-                    best_score = score
-                    best_intent = intent
-                    best_entities = entities
-        
+
+            if score == 0.0:
+                matches = sum(1 for kw in rules["keywords"] if kw in normalized)
+                if matches:
+                    score = (matches / len(rules["keywords"])) * priority
+
+            if score <= 0.0:
+                continue
+
+            entities: dict = {}
+            if "entity" in rules:
+                rule = rules["entity"]
+                trigger = rule["trigger"]
+                if trigger in words:
+                    idx = words.index(trigger)
+                    value = " ".join(words[idx + 1:])
+                    if value:
+                        entities[rule["name"]] = value
+
+            if score > best_score:
+                best_score = score
+                best_intent = intent
+                best_entities = entities
+
         if best_intent:
-            print(f"Niyet bulundu: '{best_intent}' (skor: {best_score:.2f})")
-            if best_entities:
-                for key, value in best_entities.items():
-                    print(f"  -> Parametre bulundu: {key} = '{value}'")
+            print(f"Niyet: '{best_intent}' (skor: {best_score:.2f})")
+            for key, val in best_entities.items():
+                print(f"  Parametre: {key} = '{val}'")
             return best_intent, best_entities
-        
-        print("Anlaşılır bir niyet bulunamadı.")
-        return 'unknown', {}
 
-if __name__ == '__main__':
-    nlu_system = NLU_System()
-    print("\n--- NLU Testi Başlatılıyor ---")
+        print("Anlasılır bir niyet bulunamadi.")
+        return "unknown", {}
 
-    test_sentences = [
+
+if __name__ == "__main__":
+    nlu = NLU_System()
+    tests = [
         "naber bu gün ne yapıyorsun",
-        "nasılsın bugün ne yapıyorsun",
-        "nasılsın bugün",
         "merhaba nasıl gidiyor",
         "bana dosyaları listele lütfen",
         "notlarıma yarın saat 10'da toplantı var diye not al",
         "saat kaç acaba",
         "programı kapat",
-        "sen kimsin",
+        "teşekkürler",
+        "hoşça kal",
         "bugün hava nasıl",
-        "hey nasılsın",
-        "selam naber"
+        "yardım eder misin",
+        "evet tamam",
+        "hayır istemiyorum",
     ]
-
-    for sentence in test_sentences:
-        print(f"\nCümle: '{sentence}'")
-        intent, entities = nlu_system.process_text(sentence)
-        print(f"  -> Bulunan Niyet: '{intent}', Parametreler: {entities}")
-
-    print("\nTest tamamlandı.")
+    for s in tests:
+        intent, entities = nlu.process_text(s)
+        print(f"  '{s}' -> {intent} {entities}\n")

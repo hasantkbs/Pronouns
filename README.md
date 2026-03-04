@@ -1,219 +1,352 @@
 # Personalized ASR System for Speech Disorders
 
-## 🎯 About The Project
+## About The Project
 
-This project is a personalized Automatic Speech Recognition (ASR) system designed for individuals with speech disorders. It uses a Wav2Vec2-based model, which is fine-tuned with a user's voice recordings to achieve higher accuracy in real-time speech recognition.
+This project is a personalized Automatic Speech Recognition (ASR) and speech synthesis system designed for individuals with speech disorders. It learns a person's unique pronunciation patterns from their voice recordings and uses those same recordings to synthesize understandable speech — enabling meaningful communication with others.
 
-The system employs an efficient fine-tuning technique called LoRA (Low-Rank Adaptation) to create a small, personalized adapter for the base model, rather than fully retraining it.
+The pipeline works in three stages:
 
-## 📋 System Requirements
+1. **Record** — Capture the person's word recordings with automatic quality validation.
+2. **Train** — Fine-tune a Wav2Vec2 model with LoRA adapters on the recordings.
+3. **Run** — Recognize what the person says and respond using their own voice.
+
+---
+
+## System Requirements
 
 - Python 3.9+
-- CUDA-enabled GPU (Recommended, but CPU is also supported)
-- FFmpeg (for audio processing)
+- Microphone
+- CUDA-enabled GPU (recommended; CPU is supported but slower for training)
+- Internet connection (base model is downloaded on first run, ~1.2 GB)
 
-### Optimized for High-Performance Servers
+### Recommended Hardware
 
-The system is optimized for:
-- **GPU**: NVIDIA RTX A5000 (24GB VRAM) or similar
-- **CPU**: 48+ cores (Intel Xeon E5-2670 v3 or similar)
-- See `SERVER_OPTIMIZATION.md` for details
+| Component | Recommended |
+|---|---|
+| GPU | NVIDIA RTX A5000 (24 GB VRAM) or equivalent |
+| CPU | 48+ cores (Intel Xeon or similar) |
+| RAM | 32 GB+ |
 
-## 🚀 Quick Start
+See `SERVER_OPTIMIZATION.md` and `LINUX_SERVER_SETUP.md` for server setup details.
 
-The following steps guide you through preparing data, training a model, and using it for a sample user named `Furkan`.
+---
 
-### 1. Prepare Data
+## Quick Start
 
-The system requires user-specific audio recordings and their transcriptions. For this project, sample data for the user "Furkan" is already provided in the `data/users/Furkan/` directory.
+Replace `Furkan` with your actual user ID throughout these steps.
 
-To prepare the data for training, run the following command:
+### Step 1 — Collect Voice Recordings
+
+#### Autonomous mode (recommended)
+
+Starts recording automatically when speech is detected. No button presses required.  
+The user can start the script and leave — the system works unattended.
+
+```bash
+python auto_collect.py Furkan datasets/words_set/temel_kelimeler.txt
+```
+
+Every recording passes three validation layers before being saved:
+
+1. **Quality filter** — rejects silent, too-short, or noisy recordings (RMS / duration / SNR).
+2. **Speech ratio filter** — rejects recordings that contain mostly background noise.
+3. **ASR verification** *(optional)* — rejects recordings where the spoken word does not match the target, using character error rate (CER) with tolerance for speech disorders.
+
+Common options:
+
+```bash
+# Request 5 repetitions per word (default: 10)
+python auto_collect.py Furkan datasets/words_set/temel_kelimeler.txt --reps 5
+
+# Resume from where the session was interrupted (default behaviour)
+python auto_collect.py Furkan datasets/words_set/temel_kelimeler.txt
+
+# Start fresh, ignoring existing recordings
+python auto_collect.py Furkan datasets/words_set/temel_kelimeler.txt --no-resume
+
+# Lower sound detection threshold for quiet voices
+python auto_collect.py Furkan datasets/words_set/temel_kelimeler.txt --threshold 0.008
+
+# Enable ASR-based word verification (set AUTO_ASR_VERIFY=True in config.py first)
+python auto_collect.py Furkan datasets/words_set/temel_kelimeler.txt --asr-verify
+```
+
+#### Manual mode
+
+Prompts the user to press ENTER before each recording and offers playback/keep options.
+
+```bash
+python collect_data.py
+```
+
+#### Re-record specific words
+
+To re-record words listed in `datasets/tekrar_kayit.txt`:
+
+```bash
+python collect_data.py --re-record
+```
+
+---
+
+### Step 2 — Prepare Training Data
+
+Split recordings into training (80%) and evaluation (20%) sets:
 
 ```bash
 python prepare_training_data.py Furkan
 ```
 
-This script will:
-- Read the main `metadata_words.csv` file.
-- Split the data into training (80%) and evaluation (20%) sets.
-- Create `train.csv` and `eval.csv` in the user's data directory.
+This creates `train.csv` and `eval.csv` in `data/users/Furkan/`.
 
-### 2. Train the Model
+---
 
-To train a personalized model for the user, run:
+### Step 3 — Train the Model
 
 ```bash
 python train_adapter.py Furkan
 ```
 
-This script performs the following actions:
-- Loads the base Wav2Vec2 model.
-- Fine-tunes it using a LoRA adapter with the user's data.
-- Saves the trained adapter to `data/models/personalized_models/Furkan/`.
+What happens during training:
 
-**Training Parameters** (configurable in `config.py`):
-- `NUM_FINETUNE_EPOCHS`: 20 (Number of training epochs - optimized for speech disorders)
-- `FINETUNE_BATCH_SIZE`: 4 (Batch size for training)
-- `FINETUNE_LEARNING_RATE`: 5e-5 (Learning rate - lower for stability)
-- `ADAPTER_REDUCTION_FACTOR`: 16 (LoRA adapter dimension - more parameters for better adaptation)
-- `USE_AUGMENTATION`: True (Data augmentation for better generalization)
-- `EARLY_STOPPING_PATIENCE`: 5 (Early stopping to prevent overfitting)
-- `WARMUP_STEPS`: 100 (Learning rate warmup steps)
+- Loads the base Turkish Wav2Vec2 model (`mpoyraz/wav2vec2-xls-r-300m-cv8-turkish`).
+- Applies a LoRA adapter targeting both attention and feed-forward layers (rank 16).
+- Trains with cosine LR scheduling, gradient clipping, and mixed precision (fp16).
+- Applies light data augmentation tuned for speech disorder patterns.
+- Runs WER/CER validation after every epoch; saves the best model by WER.
+- Stops early if WER stops improving (patience configurable in `config.py`).
+- Saves the final adapter to `data/models/personalized_models/Furkan/`.
 
-**New Features:**
-- ✅ Data augmentation (optimized for speech disorders)
-- ✅ Validation during training with WER/CER metrics
-- ✅ Early stopping to prevent overfitting
-- ✅ Learning rate scheduling with warmup
-- ✅ Gradient clipping for training stability
-- ✅ Automatic best model checkpointing
+To use a different base model:
 
-### 3. Evaluate the Model
+```bash
+python train_adapter.py Furkan --base_model /path/to/other/model
+```
 
-To evaluate the performance of the fine-tuned model, use:
+---
+
+### Step 4 — Evaluate the Model
 
 ```bash
 python evaluate_model.py Furkan
 ```
 
-*Optional: To evaluate only the first 100 samples:*
+Optional — limit evaluation to the first 100 samples:
+
 ```bash
 python evaluate_model.py Furkan --max_samples 100
 ```
 
-This command will:
-- Calculate WER (Word Error Rate) and CER (Character Error Rate) metrics.
-- Display sample predictions.
-- Provide suggestions for improvement.
+Target metrics for a well-trained model:
 
-### 4. Real-time Usage
+| Metric | Target |
+|---|---|
+| WER (Word Error Rate) | < 15% |
+| CER (Character Error Rate) | < 5% |
 
-To use the trained model for real-time speech recognition, run the main application:
+---
+
+### Step 5 — Run the Application
 
 ```bash
 python app.py
 ```
 
-The system will prompt you for a User ID. Type `Furkan` and press ENTER. The application will then:
-- Automatically load the personalized model if it exists.
-- Start listening to the microphone.
-- Transcribe your speech to text and display it on the screen.
+Enter a user ID when prompted. The app will:
 
-**To exit:** Say "çık" or "exit".
+1. Load the personalized LoRA adapter if one exists, otherwise fall back to the base model.
+2. Start the word synthesizer, indexing the user's recorded words for playback.
+3. Listen via microphone (press ENTER to start each recording).
+4. Transcribe speech using CTC beam search with KenLM language model (if available) or greedy decoding.
+5. Display the transcription and a **confidence score** (0–100%).
+6. Resolve the intent with the NLU system.
+7. Execute the action and **play the response back in the user's own recorded voice**.
 
-## 📁 Project Structure
+Say "çık" or "exit" to quit.
+
+---
+
+## Architecture Overview
+
+```
+auto_collect.py          Autonomous recording with 3-layer validation
+collect_data.py          Interactive recording with manual review
+
+prepare_training_data.py Split metadata into train/eval CSV
+
+train_adapter.py         LoRA fine-tuning on Wav2Vec2
+  └── PersonalizedTrainer
+        ├── LoRA rank=16, targets: attention + feed-forward layers
+        ├── Cosine LR scheduler with warmup
+        ├── WER-based best model selection
+        ├── Quality-filtered dataset loading
+        └── Light augmentation (noise, time-stretch, pitch-shift)
+
+app.py                   Main real-time application
+  ├── ASRSystem           Wav2Vec2 + LoRA adapter
+  │     ├── CTC beam search with KenLM (if available)
+  │     └── Confidence scoring per utterance
+  ├── NLU_System          Rule-based intent classifier (19 intents, Turkish)
+  ├── WordSynthesizer     Assembles response from user's own recordings
+  │     ├── Quality-indexed word database
+  │     ├── Best-K recording selection
+  │     └── Crossfade + natural pauses
+  └── run_action()        Executes the resolved intent
+```
+
+---
+
+## Project Structure
 
 ```
 Pronouns/
 ├── app.py                          # Main application entry point
-├── config.py                       # Configuration file
-├── collect_data.py                 # Data collection script
-├── prepare_training_data.py        # Data preparation script
-├── train_adapter.py                # Model training script
-├── evaluate_model.py               # Model evaluation script
+├── auto_collect.py                 # Autonomous recording script (new)
+├── collect_data.py                 # Interactive recording script
+├── config.py                       # All configuration parameters
+├── prepare_training_data.py        # train/eval CSV preparation
+├── train_adapter.py                # LoRA fine-tuning trainer
+├── evaluate_model.py               # WER/CER evaluation
 ├── src/
-│   ├── core/                       # Core Business Logic
-│   │   ├── asr.py                  # ASR System (Wav2Vec2)
-│   │   ├── nlu.py                  # Natural Language Understanding
-│   │   └── actions.py              # Action execution
-│   ├── services/                   # Business Services Layer
-│   │   ├── recording_service.py    # Recording operations service
-│   │   └── model_service.py        # Model management service
-│   ├── data/                       # Data Access Layer
-│   │   └── repository.py           # Repository pattern
-│   ├── training/                   # Training Modules
-│   │   ├── train_asr.py            # ASR training module
-│   │   ├── train_lm.py             # Language Model training
-│   │   ├── custom_collator.py      # Custom data collator
-│   │   └── augment_from_words.py   # Data augmentation
-│   ├── utils/                      # Utility Functions
-│   │   ├── utils.py                # Helper functions
-│   │   └── reporting.py            # Reporting functions
-│   └── constants.py                # Constants (separate from config)
+│   ├── core/
+│   │   ├── asr.py                  # ASRSystem: Wav2Vec2 + LM beam search
+│   │   ├── nlu.py                  # NLU: intent + entity extraction
+│   │   ├── actions.py              # Action handlers
+│   │   └── synthesizer.py          # WordSynthesizer: voice response (new)
+│   ├── services/
+│   │   ├── recording_service.py
+│   │   ├── model_service.py
+│   │   └── reporting_service.py
+│   ├── data/
+│   │   └── repository.py
+│   ├── training/
+│   │   ├── train_asr.py
+│   │   ├── train_lm.py
+│   │   ├── custom_collator.py
+│   │   └── augment_from_words.py
+│   ├── utils/
+│   │   ├── utils.py                # record_audio_auto, validate_recording (new)
+│   │   └── reporting.py
+│   └── constants.py
 ├── data/
-│   ├── users/
-│   │   └── {user_id}/
-│   │       ├── words/              # Word recordings
-│   │       │   └── {word}/
-│   │       │       └── rep{num}.wav
-│   │       ├── letters/           # Letter recordings
-│   │       ├── audio/             # Sentence recordings
-│   │       └── metadata_*.csv     # Metadata files
-│   └── models/
-│       └── personalized_models/
-│           └── {user_id}/
-│               └── checkpoints/
-│                   └── best_model/
-├── datasets/                       # Dataset files
+│   ├── users/{user_id}/
+│   │   ├── words/{word}/rep{n}.wav
+│   │   ├── metadata_words.csv
+│   │   ├── train.csv
+│   │   └── eval.csv
+│   ├── models/personalized_models/{user_id}/
+│   │   ├── adapter_config.json
+│   │   ├── adapter_model.safetensors
+│   │   └── checkpoints/best_model/
+│   └── lm/lm.arpa                  # Optional KenLM language model
+├── datasets/
 │   ├── words_set/
 │   ├── sentence_sets/
 │   └── letters_set/
-└── requirements.txt                # Python dependencies
+├── reports/                        # JSON session reports
+├── logs/                           # Training and app logs
+├── KULLANICI_KILAVUZU.md           # Turkish user guide
+└── requirements.txt
 ```
 
-For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
+---
 
-## ⚙️ Configuration
+## Configuration Reference
 
-You can adjust the following settings in `config.py`:
+All settings live in `config.py`. Key parameters:
 
+### Model
+
+| Parameter | Default | Description |
+|---|---|---|
+| `MODEL_NAME` | `mpoyraz/wav2vec2-xls-r-300m-cv8-turkish` | Base Wav2Vec2 model |
+| `ORNEKLEME_ORANI` | `16000` | Sample rate (Hz) |
+| `KENLM_MODEL_PATH` | `data/lm/lm.arpa` | Path to KenLM language model |
+| `LM_ALPHA` | `0.5` | LM weight in CTC beam search |
+| `LM_BEAM_WIDTH` | `100` | Beam search width |
+
+### Training
+
+| Parameter | Default | Description |
+|---|---|---|
+| `ADAPTER_REDUCTION_FACTOR` | `16` | LoRA rank (higher = more capacity) |
+| `NUM_FINETUNE_EPOCHS` | `30` | Maximum training epochs |
+| `FINETUNE_LEARNING_RATE` | `2e-5` | Peak learning rate |
+| `LR_SCHEDULER_TYPE` | `"cosine"` | `"cosine"` or `"linear"` |
+| `EARLY_STOPPING_PATIENCE` | `5` | Stop after N epochs without WER improvement |
+| `USE_AUGMENTATION` | `True` | Enable data augmentation |
+| `MIXED_PRECISION` | `"fp16"` | `"fp16"`, `"bf16"`, or `"no"` |
+
+### Autonomous Recording
+
+| Parameter | Default | Description |
+|---|---|---|
+| `AUTO_WORD_TIMEOUT_SEC` | `15` | Skip word after this many seconds with no valid recording |
+| `AUTO_MAX_RETRIES` | `3` | Automatic retry attempts per repetition |
+| `AUTO_SILENCE_LIMIT_SEC` | `1.0` | Silence duration that ends a recording |
+| `AUTO_SPEECH_WAIT_SEC` | `4.0` | Max wait for speech onset |
+| `AUTO_SOUND_THRESHOLD` | `0.012` | VAD threshold (lower = more sensitive) |
+| `AUTO_MIN_SPEECH_RATIO` | `0.10` | Minimum speech frame ratio (rejects empty recordings) |
+| `AUTO_ASR_VERIFY` | `False` | Enable ASR word verification |
+| `AUTO_ASR_MAX_CER` | `0.6` | Max CER for ASR verification (tolerant for speech disorders) |
+
+### Synthesis
+
+| Parameter | Default | Description |
+|---|---|---|
+| `SYNTHESIS_MIN_QUALITY` | `50` | Minimum quality score for synthesis candidates |
+| `SYNTHESIS_BEST_K` | `3` | Top-K recordings considered per word |
+| `SYNTHESIS_CROSSFADE_MS` | `30` | Crossfade between words (ms) |
+| `SYNTHESIS_PAUSE_MS` | `150` | Silence between words (ms) |
+
+---
+
+## Troubleshooting
+
+### No speech detected during auto_collect
+
+Lower the detection threshold:
+```bash
+python auto_collect.py Furkan wordlist.txt --threshold 0.008
+```
+Or set `AUTO_SOUND_THRESHOLD = 0.008` in `config.py`.
+
+### Recording rejected as "too quiet"
+
+Bring the microphone closer (20–30 cm). Also lower `MIN_RMS_LEVEL` in `config.py`:
 ```python
-# Model settings
-MODEL_NAME = "mpoyraz/wav2vec2-xls-r-300m-cv7-turkish"
-ORNEKLEME_ORANI = 16000
-
-# Training settings (optimized for speech disorders)
-NUM_FINETUNE_EPOCHS = 20
-FINETUNE_BATCH_SIZE = 4
-FINETUNE_LEARNING_RATE = 5e-5
-ADAPTER_REDUCTION_FACTOR = 16
-GRADIENT_ACCUMULATION_STEPS = 4
-WARMUP_STEPS = 100
-WEIGHT_DECAY = 1e-3
-EARLY_STOPPING_PATIENCE = 5
-USE_AUGMENTATION = True
-
-# Audio recording settings
-KAYIT_SURESI_SN = 5
-SES_ESIK_DEGERI = 0.01
+MIN_RMS_LEVEL = 200
 ```
 
-### Training Improvements for Speech Disorders
+### Base model fails to load
 
-The training pipeline has been optimized specifically for speech disorder recognition:
+Check your internet connection. The model (~1.2 GB) is downloaded from Hugging Face on first run.
 
-1. **Data Augmentation**: Light augmentation (noise, time stretch, pitch shift) to improve generalization without distorting speech patterns
-2. **Validation**: Real-time WER/CER metrics during training to monitor progress
-3. **Early Stopping**: Prevents overfitting by stopping when validation loss stops improving
-4. **Learning Rate Scheduling**: Warmup and linear decay for stable training
-5. **Enhanced LoRA**: More adapter modules (q_proj, v_proj, k_proj, out_proj) for better adaptation
-6. **Gradient Clipping**: Prevents gradient explosion for training stability
+### Training is very slow
 
-## 🐛 Troubleshooting
+Without a CUDA GPU, training runs on CPU and may take 10–20+ hours.  
+Transfer to a GPU server — see `LINUX_SERVER_SETUP.md`.
 
-### Model fails to load
-- Check your internet connection (the base model is downloaded on first use).
-- Ensure the trained model exists at `data/models/personalized_models/Furkan/`.
+### Low recognition accuracy
 
-### Errors during training
-- Make sure the audio files are located in `data/users/Furkan/words/`.
-- Verify that `metadata_words.csv` is correctly formatted.
-- Run `prepare_training_data.py` before starting the training.
+- Collect more recordings (10 repetitions per word minimum).
+- Re-run `train_adapter.py`.
+- Ensure recording environment is quiet.
+- Increase `NUM_FINETUNE_EPOCHS` or lower `FINETUNE_LEARNING_RATE` in `config.py`.
 
-### Low accuracy
-- Collect more training data.
-- Increase the number of epochs (`NUM_FINETUNE_EPOCHS` in `config.py`).
-- Adjust the learning rate (`FINETUNE_LEARNING_RATE`).
+### Synthesizer says "missing words"
 
-## 📊 Performance Metrics
+The synthesizer can only play back words that have been recorded.  
+Add the missing words to your word list and run `auto_collect.py` again.
 
-Target metrics for a good model:
-- **WER < 0.15** (Word Error Rate less than 15%)
-- **CER < 0.05** (Character Error Rate less than 5%)
+---
 
-## 📚 Documentation
+## Documentation
 
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and design patterns
-- **[TRAINING_GUIDE.md](TRAINING_GUIDE.md)** - Detailed training guide and hyperparameter tuning
-- **[SERVER_OPTIMIZATION.md](SERVER_OPTIMIZATION.md)** - Server optimization for RTX A5000
-- **[LINUX_SERVER_SETUP.md](LINUX_SERVER_SETUP.md)** - Linux server setup and configuration
+| File | Contents |
+|---|---|
+| `KULLANICI_KILAVUZU.md` | Turkish step-by-step user guide |
+| `ARCHITECTURE.md` | System architecture and design patterns |
+| `TRAINING_GUIDE.md` | Hyperparameter tuning and training best practices |
+| `SERVER_OPTIMIZATION.md` | GPU server optimization for RTX A5000 |
+| `LINUX_SERVER_SETUP.md` | Linux server setup and deployment |

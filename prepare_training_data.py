@@ -48,18 +48,12 @@ def prepare_training_data(user_id, test_size=0.2, random_state=42):
             print(f"❌ Hata: Eksik sütun(lar): {missing_columns}")
             return None, None
         
-        # Dosya yollarını düzelt (words klasörüne göre)
-        words_dir = user_path / "words"
-        def fix_file_path(path):
-            """Dosya yolunu düzeltir."""
-            if pd.isna(path):
-                return None
-            # Eğer zaten tam yol değilse, words klasörüne göre düzelt
-            filename = os.path.basename(str(path))
-            full_path = words_dir / filename
-            return str(full_path)
-        
-        df['file_path'] = df['file_path'].apply(fix_file_path)
+        # Dosya yollarını platforma göre çöz
+        # Windows'ta kaydedilen \ veya mutlak yollar, Linux'ta da doğru açılır.
+        from src.utils.utils import resolve_audio_path
+        df['file_path'] = df['file_path'].apply(
+            lambda p: resolve_audio_path(p, user_path)
+        )
         
         # Var olmayan dosyaları filtrele
         original_size = len(df)
