@@ -15,20 +15,20 @@ except ImportError:
     PYCTCDECODE_AVAILABLE = False
 
 
+from Levenshtein import distance as lev_dist
+
 class ASRSystem:
     """
     Otomatik Konuşma Tanıma (ASR) sistemi - Wav2Vec2 tabanlı.
-
-    Greedy decoding'e ek olarak, KenLM dil modeli mevcutsa CTC beam search
-    decoding da desteklenir. Bu sayede konuşma bozukluğuna ait kelimeler dil
-    modeli bağlamıyla daha doğru biçimde tanınır.
-
-    transcribe() hem tanınan metni hem de güven skorunu (0-1) döndürür.
+    Fuzzy matching desteği ile konuşma bozukluğu olan kullanıcının
+    hatalı telaffuzlarını kayıtlı kelimelerle düzeltir.
     """
 
-    def __init__(self, model_name=None):
+    def __init__(self, model_name=None, user_id=None):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self._lm_decoder = None
+        self.user_id = user_id
+        self.user_vocabulary = self._load_user_vocabulary(user_id) if user_id else []
 
         if model_name is None:
             model_name = config.MODEL_NAME
@@ -126,20 +126,58 @@ class ASRSystem:
         confidence = float(torch.exp(log_mean).clamp(0.0, 1.0))
         return confidence
 
+    def _load_user_vocabulary(self, user_id):
+        """Kullanıcının kaydettiği kelimeleri bir sözlük olarak yükler."""
+        vocab = set()
+        metadata_path = Path(config.BASE_PATH) / user_id / "metadata_words.csv"
+        if metadata_path.exists():
+            try:
+                import pandas as pd
+                df = pd.read_csv(metadata_path)
+                vocab.update(df["transcription"].str.lower().unique())
+                print(f"Kullanici sozrugu yuklendi: {len(vocab)} kelime.")
+            except Exception as e:
+                print(f"Kullanici sozrugu yuklenirken hata: {e}")
+        return list(vocab)
+
+    def _fuzzy_correct(self, raw_text):
+        """
+        Tanınan metindeki kelimeleri, kullanıcının bildiği kelimelerle karşılaştırır
+        ve en yakın olanla değiştirerek anlamlı cümle kurar.
+        """
+        if not self.user_vocabulary or not raw_text:
+            return raw_text
+
+        words = raw_text.split()
+        corrected_words = []
+        threshold = getattr(config, "FUZZY_MATCH_THRESHOLD", 0.6)
+
+        for word in words:
+            best_match = word
+            min_dist = float('inf')
+            
+            for vocab_word in self.user_vocabulary:
+                dist = lev_dist(word, vocab_word)
+                if dist < min_dist:
+                    min_dist = dist
+                    best_match = vocab_word
+            
+            # Mesafe kelime uzunluğunun belli bir oranından azsa düzeltilir
+            if min_dist / max(len(word), 1) < (1 - threshold):
+                corrected_words.append(best_match)
+            else:
+                corrected_words.append(word)
+
+        return " ".join(corrected_words)
+
     def transcribe(self, audio_path):
         """
-        Ses dosyasini metne donusturur.
-
-        Returns:
-            tuple[str | None, float]:
-                - Tanınan metin (veya None hata durumunda)
-                - Güven skoru 0-1 (0.0 hata durumunda)
+        Ses dosyasini metne donusturur ve fuzzy correction ile anlamli hale getirir.
         """
         try:
             speech, sr = librosa.load(audio_path, sr=config.ORNEKLEME_ORANI)
 
             if len(speech) == 0 or np.max(np.abs(speech)) < 0.001:
-                print("Sessizlik algilandi veya ses dosyasi cok kisa.")
                 return None, 0.0
 
             input_values = self.processor(
@@ -162,6 +200,9 @@ class ASRSystem:
 
             if not text:
                 return None, 0.0
+
+            # --- Kelime duzeltme ve anlamli cumle kurma ---
+            text = self._fuzzy_correct(text)
 
             return text, confidence
 

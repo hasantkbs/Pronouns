@@ -48,25 +48,25 @@ REPORTS_DIR = "reports"
 
 # --- Model İnce Ayar Ayarları ---
 FINETUNE_OUTPUT_DIR = "./asr_model_finetuned"
-FINETUNE_BATCH_SIZE = 2
-NUM_FINETUNE_EPOCHS = 30
-FINETUNE_EVAL_STEPS = 200
+FINETUNE_BATCH_SIZE = 4            # RTX A5000 için 4-8 arası ideal
+NUM_FINETUNE_EPOCHS = 50           # Daha fazla epoch ile daha derin öğrenme
+FINETUNE_EVAL_STEPS = 100
 FINETUNE_LOGGING_STEPS = 10
-FINETUNE_LEARNING_RATE = 2e-5
+FINETUNE_LEARNING_RATE = 3e-5      # Biraz daha yüksek LR
 
 # LoRA adapter ayarları
-# r=16: Konuşma bozukluğu için daha yüksek rank; bozukluk kalıplarını daha iyi öğrenir
-ADAPTER_REDUCTION_FACTOR = 16
+# r=32: Konuşma bozukluğundaki ses değişimlerini yakalamak için kapasite artırıldı
+ADAPTER_REDUCTION_FACTOR = 32 
 
 # Eğitim stabilite ayarları
-GRADIENT_ACCUMULATION_STEPS = 2
-MAX_GRAD_NORM = 1.0
-WEIGHT_DECAY = 0.01
-WARMUP_STEPS = 100
-EARLY_STOPPING_PATIENCE = 5
+EARLY_STOPPING_PATIENCE = 10       # Daha uzun süre sabret (overfitting riskini kontrol ederek)
+LR_SCHEDULER_TYPE = "cosine"       # Cosine scheduler genellikle daha iyi generalize eder
 
-# LR scheduler tipi: "linear" veya "cosine"
-LR_SCHEDULER_TYPE = "cosine"
+# --- Anlamli Cumle Kurma Ayarlari ---
+# Kelime tamamlama ve duzeltme esigi (0-1)
+# 0.6: %60 benzerlik gosteren kelimeyi kullanicinin sozrugunden "en yakin" olanla degistirir.
+FUZZY_MATCH_THRESHOLD = 0.6
+USE_LANGUAGE_MODEL = True          # KenLM aktivasyonu
 
 # --- Augmentation Ayarları ---
 USE_AUGMENTATION = True
