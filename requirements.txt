@@ -24,7 +24,8 @@ torchvision
 tqdm
 transformers==4.29.2
 tokenizers
-jiwerscikit-learn
+jiwer
+scikit-learn
 fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6
