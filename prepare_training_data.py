@@ -42,34 +42,38 @@ def prepare_training_data(user_id, test_size=0.2, random_state=42):
         print(f"   Toplam kayıt sayısı: {len(df)}")
         
         # Gerekli sütunları kontrol et
-        required_columns = ['file_path', 'transcription']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            print(f"❌ Hata: Eksik sütun(lar): {missing_columns}")
+        # 'transcription' veya 'transcript' sütunlarından biri olmalı
+        transcript_col = 'transcription' if 'transcription' in df.columns else 'transcript'
+        if 'file_path' not in df.columns or transcript_col not in df.columns:
+            print(f"❌ Hata: Gerekli sütunlar bulunamadı. Mevcut: {df.columns.tolist()}")
             return None, None
         
         # Dosya yollarını platforma göre çöz
-        # Windows'ta kaydedilen \ veya mutlak yollar, Linux'ta da doğru açılır.
         from src.utils.utils import resolve_audio_path
+        
+        # NaN değerleri temizle
+        df = df.dropna(subset=['file_path'])
+        
         df['file_path'] = df['file_path'].apply(
-            lambda p: resolve_audio_path(p, user_path)
+            lambda p: resolve_audio_path(str(p), user_path) if pd.notna(p) else None
         )
         
         # Var olmayan dosyaları filtrele
         original_size = len(df)
-        df = df[df['file_path'].apply(lambda x: x is not None and os.path.exists(x))]
+        df = df[df['file_path'].notna()]
+        df = df[df['file_path'].apply(lambda x: os.path.exists(str(x)))]
         removed_count = original_size - len(df)
         
         if removed_count > 0:
-            print(f"⚠️  {removed_count} adet bulunamayan ses dosyası atlandı.")
+            print(f"⚠️  {removed_count} adet bulunamayan veya geçersiz ses dosyası atlandı.")
         
         if len(df) == 0:
             print(f"❌ Hata: Hiç geçerli ses dosyası bulunamadı!")
             return None, None
         
         # Sütunları seç ve yeniden adlandır
-        df = df[['file_path', 'transcription']].copy()
-        df.rename(columns={'transcription': 'transcript'}, inplace=True)
+        df = df[['file_path', transcript_col]].copy()
+        df.rename(columns={transcript_col: 'transcript'}, inplace=True)
         
         # Boş transkriptleri filtrele
         df = df[df['transcript'].notna() & (df['transcript'].str.strip() != '')]

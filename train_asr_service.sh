@@ -36,6 +36,16 @@ else
     echo ""
 fi
 
+# Venv kontrolü ve aktivasyonu
+VENV_PATH="./venv"
+if [ -d "$VENV_PATH" ]; then
+    echo -e "${GREEN}✅ Sanal ortam bulundu: ${VENV_PATH}${NC}"
+    PYTHON_EXE="$VENV_PATH/bin/python"
+else
+    echo -e "${YELLOW}⚠️  Sanal ortam bulunamadı, sistem python'ı kullanılacak${NC}"
+    PYTHON_EXE="python3"
+fi
+
 # Log dizini oluştur
 mkdir -p "$LOG_DIR"
 
@@ -46,7 +56,7 @@ echo -e "Log dosyası: ${YELLOW}${LOG_DIR}/training_${USER_ID}_${TIMESTAMP}.log$
 echo ""
 
 # Eğitimi başlat (nohup ile arka planda çalıştırılabilir)
-python3 train_adapter.py "$USER_ID" 2>&1 | tee "${LOG_DIR}/training_${USER_ID}_${TIMESTAMP}.log"
+$PYTHON_EXE train_adapter.py "$USER_ID" 2>&1 | tee "${LOG_DIR}/training_${USER_ID}_${TIMESTAMP}.log"
 
 EXIT_CODE=${PIPESTATUS[0]}
 

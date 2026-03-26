@@ -1,0 +1,13 @@
+.git
+venv
+data
+datasets
+logs
+reports
+runs
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.db
+.ipynb_checkpoints

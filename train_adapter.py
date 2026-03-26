@@ -322,25 +322,40 @@ class PersonalizedTrainer:
         self.model = Wav2Vec2ForCTC.from_pretrained(self.base_model_path)
         
         # Gradient checkpointing (opsiyonel, VRAM tasarrufu için)
-        if config.GRADIENT_CHECKPOINTING and hasattr(self.model, 'gradient_checkpointing_enable'):
-            self.model.gradient_checkpointing_enable()
-            print("   ✅ Gradient checkpointing aktif (VRAM tasarrufu)")
+        if config.GRADIENT_CHECKPOINTING:
+            if hasattr(self.model, 'gradient_checkpointing_enable'):
+                self.model.gradient_checkpointing_enable()
+                print("   ✅ Gradient checkpointing aktif (VRAM tasarrufu)")
+            else:
+                print("   ⚠️  Model gradient checkpointing desteklemiyor.")
         
+        # Wav2Vec2 için kritik yama: PEFT ve Gradient Checkpointing birlikte kullanıldığında
+        # 'get_input_embeddings' metodunu arar. Wav2Vec2'de bu olmadığı için manuel ekliyoruz.
+        def _patch_embeddings(model):
+            if not hasattr(model, "get_input_embeddings"):
+                model.get_input_embeddings = lambda: None
+            if hasattr(model, "base_model") and not hasattr(model.base_model, "get_input_embeddings"):
+                model.base_model.get_input_embeddings = lambda: None
+            if hasattr(model, "wav2vec2") and not hasattr(model.wav2vec2, "get_input_embeddings"):
+                model.wav2vec2.get_input_embeddings = lambda: None
+
+        print("   🔧 Wav2Vec2 mimarisi için 'get_input_embeddings' yaması uygulanıyor...")
+        _patch_embeddings(self.model)
+
         self.model.to(self.device)
         
         # Konuşma bozukluğu için optimize edilmiş LoRA konfigürasyonu.
-        # Attention projeksiyon katmanlarına ek olarak feed-forward yoğun katmanlar
-        # da dahil edilerek modelin konuşma bozukluğu kalıplarını öğrenme kapasitesi artırıldı.
         peft_config = LoraConfig(
-            r=config.ADAPTER_REDUCTION_FACTOR,            # rank=16; daha yüksek -> daha iyi uyum
+            r=config.ADAPTER_REDUCTION_FACTOR,
             lora_alpha=config.ADAPTER_REDUCTION_FACTOR * 2,
             target_modules=[
-                "q_proj", "v_proj", "k_proj", "out_proj",   # Attention katmanları
-                "intermediate_dense", "output_dense",         # Feed-forward katmanları
+                "q_proj", "v_proj", "k_proj", "out_proj",
             ],
             lora_dropout=0.05,
             bias="none",
         )
+        
+        print("   🚀 Model PEFT/LoRA ile sarmalanıyor...")
         self.model = get_peft_model(self.model, peft_config)
         
         # Trainable parametreleri göster

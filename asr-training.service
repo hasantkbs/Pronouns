@@ -4,13 +4,13 @@ After=network.target
 
 [Service]
 Type=simple
-User=YOUR_USERNAME
-WorkingDirectory=/path/to/Pronouns
-Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+User=server
+WorkingDirectory=/home/server/Desktop/project/Pronouns
+Environment="PATH=/home/server/Desktop/project/Pronouns/venv/bin:/usr/local/bin:/usr/bin:/bin"
 Environment="CUDA_VISIBLE_DEVICES=0"
-ExecStart=/usr/bin/python3 /path/to/Pronouns/train_adapter.py Furkan
-StandardOutput=append:/path/to/Pronouns/logs/training_service.log
-StandardError=append:/path/to/Pronouns/logs/training_service_error.log
+ExecStart=/home/server/Desktop/project/Pronouns/venv/bin/python train_adapter.py FurkanV1
+StandardOutput=append:/home/server/Desktop/project/Pronouns/logs/training_service.log
+StandardError=append:/home/server/Desktop/project/Pronouns/logs/training_service_error.log
 Restart=on-failure
 RestartSec=10
 
@@ -20,4 +20,3 @@ MemoryLimit=64G
 
 [Install]
 WantedBy=multi-user.target
-

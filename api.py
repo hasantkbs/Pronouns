@@ -6,6 +6,7 @@ import uuid
 import shutil
 from pathlib import Path
 import config
+from fastapi.middleware.cors import CORSMiddleware
 from src.core.asr import ASRSystem
 from src.core.synthesizer import WordSynthesizer
 from src.core.nlu import NLU_System
@@ -13,6 +14,15 @@ from src.core.actions import run_action
 from train_adapter import PersonalizedTrainer
 
 app = FastAPI(title="Pronouns AI API")
+
+# CORS ayarları - Farklı ağlardan erişim için
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Global sistemler (Lazy loading için None)
 asr_systems = {}  # user_id -> ASRSystem
@@ -85,6 +95,14 @@ async def translate_speech(user_id: str = Form(...), audio: UploadFile = File(..
 @app.get("/download/{filename}")
 async def download_audio(filename: str):
     return FileResponse(filename, media_type="audio/wav")
+
+@app.get("/apk")
+async def download_apk():
+    """APK dosyasını indirir."""
+    apk_path = Path(config.BASE_PATH).parent / "apk" / "pronouns.apk"
+    if not apk_path.exists():
+        return {"error": "APK henüz mevcut değil. Lütfen önce derleyin."}
+    return FileResponse(apk_path, media_type="application/vnd.android.package-archive", filename="pronouns.apk")
 
 if __name__ == "__main__":
     import uvicorn

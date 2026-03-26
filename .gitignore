@@ -12,7 +12,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -67,5 +66,29 @@ checkpoints/
 runs/
 wandb/
 
-# === Proje Yönetimi ===
-gelistirme.txtMiniconda3-latest-MacOSX-x86_64.sh
+# === Veri ve Modeller ===
+data/
+reports/
+datasets/
+*.wav
+*.mp3
+
+# === Flutter Platforms ===
+android/
+ios/
+linux/
+macos/
+windows/
+web/
+test/
+
+# === IDE ===
+.vscode/
+.idea/
+.dart_tool/
+.metadata
+.flutter-plugins-dependencies
+analysis_options.yaml
+pubspec.lock
+*.iml
+[20

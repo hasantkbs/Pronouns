@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 void main() {
   runApp(PronounsApp());
@@ -9,6 +11,7 @@ class PronounsApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Pronouns AI',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.deepPurple,
         brightness: Brightness.dark,
@@ -20,6 +23,8 @@ class PronounsApp extends StatelessWidget {
 }
 
 class HomeScreen extends StatelessWidget {
+  final String baseUrl = 'http://91.241.50.187:8000';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -63,7 +68,7 @@ class HomeScreen extends StatelessWidget {
 
   void _navigateTo(BuildContext context, String feature) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature özelliği yakında eklenecek!')),
+      SnackBar(content: Text('$feature özelliği sunucuya bağlı ($baseUrl)')),
     );
   }
 }

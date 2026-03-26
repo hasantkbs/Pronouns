@@ -1,0 +1,23 @@
+services:
+  pronouns-api:
+    build: .
+    image: pronouns-ai-api:latest
+    container_name: pronouns-api
+    restart: always
+    runtime: nvidia
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONUNBUFFERED=1
