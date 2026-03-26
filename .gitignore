@@ -36,6 +36,7 @@ Pronouns/
 *.swp
 *.swo
 *~
+*.iml
 
 # === OS ===
 .DS_Store
@@ -73,22 +74,8 @@ datasets/
 *.wav
 *.mp3
 
-# === Flutter Platforms ===
-android/
-ios/
-linux/
-macos/
-windows/
-web/
-test/
-
-# === IDE ===
-.vscode/
-.idea/
+# === Flutter (generated artifacts) ===
 .dart_tool/
-.metadata
+.flutter-plugins
 .flutter-plugins-dependencies
-analysis_options.yaml
-pubspec.lock
-*.iml
-[20
+build/
