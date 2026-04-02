@@ -5,15 +5,23 @@ import os
 import uuid
 import shutil
 from pathlib import Path
-import config
+from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+import config
 from src.core.asr import ASRSystem
 from src.core.synthesizer import WordSynthesizer
 from src.core.nlu import NLU_System
 from src.core.actions import run_action
 from train_adapter import PersonalizedTrainer
+from src.data.repository import UserDataRepository
+from src.utils.utils import calculate_audio_quality, normalize_path_for_cross_platform
+from src.constants import RECORD_TYPE_WORD
 
 app = FastAPI(title="Pronouns AI API")
+
+# Repository instance
+repo = UserDataRepository()
 
 # CORS ayarları - Farklı ağlardan erişim için
 app.add_middleware(
@@ -31,22 +39,88 @@ nlu = NLU_System()
 def get_asr(user_id: str):
     if user_id not in asr_systems:
         from src.services.model_service import ModelService
+        # FurkanV1 zorlaması yapılabilir veya dinamik bırakılabilir
+        # Kullanıcı FurkanV1 dediği için varsayılan olarak onu arayacaktır.
         model_path = ModelService.find_personalized_model(user_id)
         asr_systems[user_id] = ASRSystem(model_name=model_path)
     return asr_systems[user_id]
 
+@app.get("/words")
+async def list_words(user_id: str = "FurkanV1"):
+    """Kaydedilecek kelimeleri ve mevcut kayıt durumlarını döndürür."""
+    # Varsayılan kelime setini oku
+    word_file = Path("datasets/words_set/wordSet.txt")
+    if not word_file.exists():
+        return {"error": "Kelime seti bulunamadı."}
+    
+    with open(word_file, "r", encoding="utf-8") as f:
+        all_words = [line.strip() for line in f if line.strip()]
+    
+    # Mevcut kayıt detaylarını al
+    details = repo.get_recorded_details(user_id, RECORD_TYPE_WORD)
+    
+    result = []
+    # Sadece kaydı eksik olan kelimeleri bulalım
+    for word in all_words:
+        count = details.get(word, 0)
+        required = config.IDEAL_REPETITIONS
+        
+        if count < required:
+            result.append({
+                "word": word,
+                "count": count,
+                "required": required
+            })
+            
+        # Performans için liste çok uzamasın (örn: 50 kelime yeterli)
+        if len(result) >= 50:
+            break
+    
+    return {"words": result}
+
 @app.post("/record")
-async def upload_record(user_id: str = Form(...), word: str = Form(...), rep: int = Form(...), audio: UploadFile = File(...)):
-    """Mobil uygulamadan gelen ses kaydını saklar."""
-    user_dir = Path(config.BASE_PATH) / user_id / "words" / word
+async def upload_record(
+    user_id: str = Form(...), 
+    word: str = Form(...), 
+    audio: UploadFile = File(...)
+):
+    """Mobil uygulamadan gelen ses kaydını saklar ve metadata günceller."""
+    user_dir = repo.get_save_path(user_id, RECORD_TYPE_WORD) / word
     user_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Kaçıncı tekrar olduğunu bul
+    current_count = repo.get_recorded_count(user_id, RECORD_TYPE_WORD, word)
+    rep = current_count + 1
     
     file_path = user_dir / f"rep{rep}.wav"
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(audio.file, buffer)
     
-    # Metadata güncelleme (Opsiyonel: Burada repository kullanılabilir)
-    return {"status": "success", "path": str(file_path)}
+    # Kalite hesapla
+    quality_info = calculate_audio_quality(str(file_path))
+    
+    # Metadata kaydet
+    relative_path = normalize_path_for_cross_platform(str(file_path.absolute()), repo.get_user_path(user_id))
+    
+    metadata_entry = {
+        "file_path": relative_path,
+        "transcription": word,
+        "repetition": rep,
+        "quality_score": quality_info['quality_score'],
+        "rms": quality_info['rms'],
+        "snr_db": quality_info['snr_db'],
+        "duration": quality_info['duration']
+    }
+    
+    repo.save_metadata(user_id, RECORD_TYPE_WORD, [metadata_entry], append=True)
+    
+    return {
+        "status": "success", 
+        "word": word,
+        "rep": rep,
+        "quality": quality_info['quality_score'],
+        "path": str(file_path)
+    }
 
 @app.post("/train")
 async def start_training(user_id: str, background_tasks: BackgroundTasks):
@@ -106,4 +180,4 @@ async def download_apk():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

@@ -62,7 +62,9 @@ class ModelEvaluator:
             base_model = Wav2Vec2ForCTC.from_pretrained(self.base_model_name)
 
         print(f"📥 Kişiselleştirilmiş adapter yükleniyor: {self.personalized_model_dir}")
-        self.model = PeftModel.from_pretrained(base_model, str(self.personalized_model_dir))
+        # Safetensors desteği için path'i tam yol olarak veriyoruz
+        model_path = os.path.abspath(str(self.personalized_model_dir))
+        self.model = PeftModel.from_pretrained(base_model, model_path)
         self.model.to(self.device)
         self.model.eval()
 

@@ -93,6 +93,12 @@ class PersonalizedTrainer:
             bias="none",
         )
         self.model = get_peft_model(self.model, peft_config)
+        
+        if config.GRADIENT_CHECKPOINTING:
+            self.model.gradient_checkpointing_enable()
+            self.model.enable_input_require_grads()
+            self.model.config.use_cache = False  # Whisper için eğitimde zorunlu
+            
         print(f"✅ Model yüklendi. Cihaz: {self.device}")
 
     def prepare_dataset(self, df):
@@ -161,6 +167,7 @@ class PersonalizedTrainer:
         training_args = TrainingArguments(
             output_dir=self.output_dir,
             per_device_train_batch_size=config.FINETUNE_BATCH_SIZE,
+            per_device_eval_batch_size=config.FINETUNE_BATCH_SIZE, # Eval için de düşük batch size
             gradient_accumulation_steps=config.GRADIENT_ACCUMULATION_STEPS,
             learning_rate=config.FINETUNE_LEARNING_RATE,
             warmup_steps=50,
@@ -171,7 +178,9 @@ class PersonalizedTrainer:
             load_best_model_at_end=True,
             metric_for_best_model="wer",
             greater_is_better=False,
-            fp16=torch.cuda.is_available(),
+            fp16=(config.MIXED_PRECISION == "fp16"),
+            bf16=(config.MIXED_PRECISION == "bf16"),
+            gradient_checkpointing=config.GRADIENT_CHECKPOINTING,
             run_name=f"personalize-{self.user_id}",
         )
 

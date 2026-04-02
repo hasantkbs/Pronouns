@@ -32,14 +32,18 @@ class ModelService:
         for root in personalized_roots:
             base_path = root / user_id
             if base_path.exists() and any(base_path.iterdir()):
-                # Best model checkpoint'i kontrol et
-                best_ckpt_path = base_path / CHECKPOINT_DIR / BEST_MODEL_DIR
-                adapter_bin = best_ckpt_path / "adapter_model.bin"
-                
-                if best_ckpt_path.exists() and adapter_bin.exists():
-                    return str(best_ckpt_path)
-                else:
+                # Önce ana dizindeki adapter dosyalarını kontrol et
+                if (base_path / "adapter_model.bin").exists() or (base_path / "adapter_model.safetensors").exists():
                     return str(base_path)
+                
+                # Sonra best model checkpoint'i kontrol et
+                best_ckpt_path = base_path / CHECKPOINT_DIR / BEST_MODEL_DIR
+                if best_ckpt_path.exists():
+                    if (best_ckpt_path / "adapter_model.bin").exists() or (best_ckpt_path / "adapter_model.safetensors").exists():
+                        return str(best_ckpt_path)
+                    
+                # Herhangi bir dosya varsa dizini döndür
+                return str(base_path)
         
         return None
     

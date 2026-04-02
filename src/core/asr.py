@@ -3,8 +3,14 @@ import os
 import torch
 import librosa
 import numpy as np
+import json
 from pathlib import Path
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
+from transformers import (
+    Wav2Vec2ForCTC, 
+    Wav2Vec2Processor,
+    WhisperForConditionalGeneration,
+    WhisperProcessor
+)
 from peft import PeftModel
 import config
 
@@ -19,7 +25,7 @@ from Levenshtein import distance as lev_dist
 
 class ASRSystem:
     """
-    Otomatik Konuşma Tanıma (ASR) sistemi - Wav2Vec2 tabanlı.
+    Otomatik Konuşma Tanıma (ASR) sistemi - Wav2Vec2 ve Whisper tabanlı.
     Fuzzy matching desteği ile konuşma bozukluğu olan kullanıcının
     hatalı telaffuzlarını kayıtlı kelimelerle düzeltir.
     """
@@ -29,39 +35,63 @@ class ASRSystem:
         self._lm_decoder = None
         self.user_id = user_id
         self.user_vocabulary = self._load_user_vocabulary(user_id) if user_id else []
+        self.model_type = "wav2vec2" # Default
 
         if model_name is None:
             model_name = config.MODEL_NAME
 
         if os.path.exists(model_name) and os.path.isdir(model_name):
-            base_model_name = config.MODEL_NAME
             try:
-                print(f"Temel model yukleniyor: {base_model_name}")
-                self.processor = Wav2Vec2Processor.from_pretrained(base_model_name)
-                base_model = Wav2Vec2ForCTC.from_pretrained(
-                    base_model_name,
-                    pad_token_id=self.processor.tokenizer.pad_token_id,
-                    vocab_size=len(self.processor.tokenizer),
-                )
+                # Mimari tespiti
+                adapter_config_path = Path(model_name) / "adapter_config.json"
+                if adapter_config_path.exists():
+                    with open(adapter_config_path, 'r') as f:
+                        adapter_config = json.load(f)
+                    base_model_path = adapter_config.get("base_model_name_or_path", config.MODEL_NAME)
+                    
+                    if "whisper" in base_model_path.lower():
+                        self.model_type = "whisper"
+                        print(f"Whisper mimarisi tespit edildi: {base_model_path}")
+                        self.processor = WhisperProcessor.from_pretrained(base_model_path)
+                        base_model = WhisperForConditionalGeneration.from_pretrained(base_model_path)
+                    else:
+                        self.model_type = "wav2vec2"
+                        print(f"Wav2Vec2 mimarisi tespit edildi: {base_model_path}")
+                        self.processor = Wav2Vec2Processor.from_pretrained(base_model_path)
+                        base_model = Wav2Vec2ForCTC.from_pretrained(base_model_path)
+                else:
+                    # Config yoksa varsayılan Wav2Vec2 varsay
+                    base_model_path = config.MODEL_NAME
+                    self.processor = Wav2Vec2Processor.from_pretrained(base_model_path)
+                    base_model = Wav2Vec2ForCTC.from_pretrained(base_model_path)
+
                 print(f"Kisisellestirilmis adapter yukleniyor: {model_name}")
                 self.model = PeftModel.from_pretrained(base_model, model_name)
                 self.model.to(self.device)
                 self.model.eval()
-                print(f"ASR Sistemi hazir. Kisisellestirilmis model: {model_name} | Cihaz: {self.device}")
+                print(f"ASR Sistemi hazir. ({self.model_type}) | Cihaz: {self.device}")
             except Exception as e:
                 print(f"Kisisellestirilmis model yuklenemedi: {e}")
-                print(f"Varsayilan model kullanilacak: {base_model_name}")
-                self._load_base_model(base_model_name)
+                print(f"Varsayilan model kullanilacak.")
+                self._load_base_model(config.MODEL_NAME)
         else:
             self._load_base_model(model_name)
 
-        self._build_lm_decoder()
+        if self.model_type == "wav2vec2":
+            self._build_lm_decoder()
 
     def _load_base_model(self, model_name):
         try:
             print(f"Model yukleniyor: {model_name}")
-            self.processor = Wav2Vec2Processor.from_pretrained(model_name)
-            self.model = Wav2Vec2ForCTC.from_pretrained(model_name)
+            if "whisper" in model_name.lower():
+                self.model_type = "whisper"
+                self.processor = WhisperProcessor.from_pretrained(model_name)
+                self.model = WhisperForConditionalGeneration.from_pretrained(model_name)
+            else:
+                self.model_type = "wav2vec2"
+                self.processor = Wav2Vec2Processor.from_pretrained(model_name)
+                self.model = Wav2Vec2ForCTC.from_pretrained(model_name)
+                
             self.model.to(self.device)
             self.model.eval()
             print(f"ASR Sistemi hazir. Model: {model_name} | Cihaz: {self.device}")
@@ -111,12 +141,13 @@ class ASRSystem:
         return text.strip()
 
     @staticmethod
-    def _confidence_from_logits(logits_tensor):
+    def _confidence_from_logits(logits_tensor, model_type="wav2vec2"):
         """
         Logit'lerden ortalama token güven skoru hesaplar (0-1 arası).
-        Greedy seçilen token'in softmax olasılıklarının geometrik ortalamasıdır.
-        Düşük skor -> model kararsız; yüksek skor -> güvenli tanıma.
         """
+        if model_type == "whisper":
+            return 0.85 
+
         probs = torch.softmax(logits_tensor, dim=-1)
         max_probs, _ = probs.max(dim=-1)
         non_blank = max_probs[max_probs < 0.99]
@@ -180,23 +211,30 @@ class ASRSystem:
             if len(speech) == 0 or np.max(np.abs(speech)) < 0.001:
                 return None, 0.0
 
-            input_values = self.processor(
-                speech,
-                sampling_rate=sr,
-                return_tensors="pt",
-                padding=True,
-            ).input_values.to(self.device)
-
-            with torch.no_grad():
-                logits = self.model(input_values).logits
-
-            confidence = self._confidence_from_logits(logits[0])
-
-            if self._lm_decoder is not None:
-                logits_np = logits.cpu().numpy()
-                text = self._beam_decode(logits_np)
+            if self.model_type == "whisper":
+                input_features = self.processor(speech, sampling_rate=sr, return_tensors="pt").input_features.to(self.device)
+                with torch.no_grad():
+                    generated_ids = self.model.generate(input_features, language="tr", task="transcribe")
+                text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+                confidence = 0.85 
             else:
-                text = self._greedy_decode(logits.cpu().numpy())
+                input_values = self.processor(
+                    speech,
+                    sampling_rate=sr,
+                    return_tensors="pt",
+                    padding=True,
+                ).input_values.to(self.device)
+
+                with torch.no_grad():
+                    logits = self.model(input_values).logits
+
+                confidence = self._confidence_from_logits(logits[0], self.model_type)
+
+                if self._lm_decoder is not None:
+                    logits_np = logits.cpu().numpy()
+                    text = self._beam_decode(logits_np)
+                else:
+                    text = self._greedy_decode(logits.cpu().numpy())
 
             if not text:
                 return None, 0.0

@@ -48,8 +48,8 @@ REPORTS_DIR = "reports"
 
 # --- Model İnce Ayar Ayarları ---
 FINETUNE_OUTPUT_DIR = "./asr_model_finetuned"
-FINETUNE_BATCH_SIZE = 16           # RTX A5000 için 16 ideal
-GRADIENT_ACCUMULATION_STEPS = 2    # Gradyan biriktirme (etkin batch size = 16 * 2 = 32)
+FINETUNE_BATCH_SIZE = 4            # RTX A5000 için 16'dan 4'e düşürüldü (OOM engelleme)
+GRADIENT_ACCUMULATION_STEPS = 8    # Gradyan biriktirme (etkin batch size = 4 * 8 = 32, korundu)
 NUM_FINETUNE_EPOCHS = 50           # Daha fazla epoch ile daha derin öğrenme
 FINETUNE_EVAL_STEPS = 100
 FINETUNE_LOGGING_STEPS = 10
@@ -57,14 +57,15 @@ FINETUNE_LEARNING_RATE = 3e-5      # Biraz daha yüksek LR
 WARMUP_STEPS = 100                 # Öğrenme oranı ısınma adımları
 WEIGHT_DECAY = 0.01                # Ağırlık sönümü (overfitting engelleme)
 MAX_GRAD_NORM = 1.0                # Gradyan kırpma (stabilite için)
-
 # LoRA adapter ayarları
-# r=32: Konuşma bozukluğundaki ses değişimlerini yakalamak için kapasite artırıldı
-ADAPTER_REDUCTION_FACTOR = 32 
+# r=64: Konuşma bozukluğundaki ses değişimlerini daha detaylı yakalamak için kapasite artırıldı
+ADAPTER_REDUCTION_FACTOR = 64 
 
 # Eğitim stabilite ayarları
-EARLY_STOPPING_PATIENCE = 10       # Daha uzun süre sabret (overfitting riskini kontrol ederek)
-LR_SCHEDULER_TYPE = "cosine"       # Cosine scheduler genellikle daha iyi generalize eder
+EARLY_STOPPING_PATIENCE = 20       # Daha fazla sabır (daha derin öğrenme için)
+NUM_FINETUNE_EPOCHS = 100          # Maksimum limit
+FINETUNE_LEARNING_RATE = 3e-5      # Daha agresif ve etkili LR
+LR_SCHEDULER_TYPE = "cosine"       # Cosine scheduler
 
 # --- Anlamli Cumle Kurma Ayarlari ---
 # Kelime tamamlama ve duzeltme esigi (0-1)
@@ -77,21 +78,20 @@ USE_AUGMENTATION = True
 # Hafif augmentation; konuşma bozukluğu kalıplarını bozmamak için düşük yoğunluk
 AUGMENT_NOISE_MIN = 0.0005
 AUGMENT_NOISE_MAX = 0.003
-AUGMENT_TIME_STRETCH_MIN = 0.9
-AUGMENT_TIME_STRETCH_MAX = 1.1
+AUGMENT_TIME_STRETCH_MIN = 0.7
+AUGMENT_TIME_STRETCH_MAX = 1.3
 AUGMENT_PITCH_MIN = -2
 AUGMENT_PITCH_MAX = 2
 AUGMENT_TIME_MASK_MIN = 0.02
 AUGMENT_TIME_MASK_MAX = 0.08
-AUGMENT_PROBABILITY = 0.5
-
+AUGMENT_PROBABILITY = 0.7
 # --- Donanım ve Performans Ayarları ---
 MIXED_PRECISION = "fp16"          # "fp16", "bf16" veya "no"
-GRADIENT_CHECKPOINTING = False    # VRAM yeterli olduğu için kapatıldı (RTX A5000 24GB)
+GRADIENT_CHECKPOINTING = True     # VRAM tasarrufu için aktifleştirildi (Özellikle Whisper için kritik)
 DATALOADER_NUM_WORKERS = 8        # 48 çekirdek için optimize edildi
 DATALOADER_PIN_MEMORY = True
 DATALOADER_PREFETCH_FACTOR = 4
-DATA_PREPROCESSING_NUM_PROC = 16   # 48 çekirdek için 16 süreç ideal
+DATA_PREPROCESSING_NUM_PROC = 1   # 2'den 1'e düşürüldü (Maksimum stabilite için)
 
 # --- Çoklu İşlem Ayarları ---
 MULTIPROCESSING_START_METHOD = "fork"   # Linux'ta daha hızlı
