@@ -21,6 +21,8 @@ except ImportError:
     PYCTCDECODE_AVAILABLE = False
 
 
+from src.utils.utils import normalize_turkish_text
+
 from Levenshtein import distance as lev_dist
 
 class ASRSystem:
@@ -118,7 +120,7 @@ class ASRSystem:
 
             self._lm_decoder = build_ctcdecoder(
                 labels=labels,
-                kenlm_model=lm_path,
+                kenlm_model_path=lm_path,
                 alpha=config.LM_ALPHA,
                 beta=config.LM_BETA,
             )
@@ -136,8 +138,19 @@ class ASRSystem:
     def _beam_decode(self, logits_np):
         """KenLM destekli CTC beam search decoding."""
         import numpy as np
-        log_probs = np.log(np.exp(logits_np[0]) / np.exp(logits_np[0]).sum(axis=-1, keepdims=True) + 1e-10)
-        text = self._lm_decoder.decode(log_probs, beam_width=config.LM_BEAM_WIDTH)
+        # Log-softmax calculate
+        log_probs = logits_np[0] - np.log(np.exp(logits_np[0]).sum(axis=-1, keepdims=True) + 1e-10)
+        
+        hotwords = self.user_vocabulary if self.user_vocabulary else None
+        # Biasing strength (higher = more likely to pick vocabulary words)
+        hotword_weight = 10.0 
+        
+        text = self._lm_decoder.decode(
+            log_probs, 
+            beam_width=config.LM_BEAM_WIDTH,
+            hotwords=hotwords,
+            hotword_weight=hotword_weight
+        )
         return text.strip()
 
     @staticmethod
@@ -165,7 +178,11 @@ class ASRSystem:
             try:
                 import pandas as pd
                 df = pd.read_csv(metadata_path)
-                vocab.update(df["transcription"].str.lower().unique())
+                # Kelimeleri normalize ederek yukle
+                for w in df["transcription"].unique():
+                    normalized_w = normalize_turkish_text(str(w))
+                    if normalized_w:
+                        vocab.add(normalized_w)
                 print(f"Kullanici sozrugu yuklendi: {len(vocab)} kelime.")
             except Exception as e:
                 print(f"Kullanici sozrugu yuklenirken hata: {e}")
@@ -176,7 +193,13 @@ class ASRSystem:
         Tanınan metindeki kelimeleri, kullanıcının bildiği kelimelerle karşılaştırır
         ve en yakın olanla değiştirerek anlamlı cümle kurar.
         """
-        if not self.user_vocabulary or not raw_text:
+        if not raw_text:
+            return raw_text
+
+        # Metni normalize et
+        raw_text = normalize_turkish_text(raw_text)
+        
+        if not self.user_vocabulary:
             return raw_text
 
         words = raw_text.split()
@@ -194,6 +217,7 @@ class ASRSystem:
                     best_match = vocab_word
             
             # Mesafe kelime uzunluğunun belli bir oranından azsa düzeltilir
+            # Kısa kelimeler için daha katı, uzunlar için daha esnek
             if min_dist / max(len(word), 1) < (1 - threshold):
                 corrected_words.append(best_match)
             else:

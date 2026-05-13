@@ -155,7 +155,7 @@ def get_asr(user_id: str):
     if user_id not in asr_systems:
         from src.services.model_service import ModelService
         model_path = ModelService.find_personalized_model(user_id)
-        asr_systems[user_id] = ASRSystem(model_name=model_path)
+        asr_systems[user_id] = ASRSystem(model_name=model_path, user_id=user_id)
     return asr_systems[user_id]
 
 @app.get("/words")

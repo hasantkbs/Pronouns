@@ -58,14 +58,14 @@ WARMUP_STEPS = 100                 # Öğrenme oranı ısınma adımları
 WEIGHT_DECAY = 0.01                # Ağırlık sönümü (overfitting engelleme)
 MAX_GRAD_NORM = 1.0                # Gradyan kırpma (stabilite için)
 # LoRA adapter ayarları
-# r=64: Konuşma bozukluğundaki ses değişimlerini daha detaylı yakalamak için kapasite artırıldı
-ADAPTER_REDUCTION_FACTOR = 64 
+# r=128: Konuşma bozukluğundaki ses değişimlerini daha detaylı yakalamak için kapasite artırıldı
+ADAPTER_REDUCTION_FACTOR = 128 
 
 # Eğitim stabilite ayarları
-EARLY_STOPPING_PATIENCE = 20       # Daha fazla sabır (daha derin öğrenme için)
+EARLY_STOPPING_PATIENCE = 30       # Daha fazla sabır (daha derin öğrenme için)
 NUM_FINETUNE_EPOCHS = 100          # Maksimum limit
-FINETUNE_LEARNING_RATE = 3e-5      # Daha agresif ve etkili LR
-LR_SCHEDULER_TYPE = "cosine"       # Cosine scheduler
+FINETUNE_BATCH_SIZE = 8            # 4'ten 8'e çıkarıldı
+GRADIENT_ACCUMULATION_STEPS = 4    # Toplam batch size 32 (8 * 4) korunuyor
 
 # --- Anlamli Cumle Kurma Ayarlari ---
 # Kelime tamamlama ve duzeltme esigi (0-1)

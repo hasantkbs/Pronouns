@@ -527,6 +527,31 @@ def _char_error_rate(ref: str, hyp: str) -> float:
     return dp[hyp_len] / ref_len
 
 
+def normalize_turkish_text(text: str) -> str:
+    """
+    Türkçe karakterleri ve genel metni normalize eder.
+    - Büyük İ -> i, I -> ı dönüşümü yapar.
+    - Küçük harfe çevirir.
+    - Noktalama işaretlerini kaldırır.
+    - Çift boşlukları temizler.
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    
+    # Türkçe büyük harf dönüşümleri
+    text = text.replace('İ', 'i').replace('I', 'ı')
+    text = text.lower()
+    
+    # Noktalama işaretlerini kaldır (basit yöntem)
+    import string
+    punctuation = string.punctuation + "’“”"
+    text = "".join([c for c in text if c not in punctuation])
+    
+    # Çift boşlukları temizle
+    text = " ".join(text.split())
+    
+    return text
+
 def save_model_and_processor(model, processor, path: str):
     """
     Saves the model and processor to the given path.

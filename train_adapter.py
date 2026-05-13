@@ -148,6 +148,8 @@ def _standalone_preprocess_function(examples, processor, augmenter=None):
     transcript_key = "transcript" if "transcript" in examples else "transcription"
     transcripts = examples.get(transcript_key, [""] * len(examples["file_path"]))
     
+    from src.utils.utils import normalize_turkish_text
+    
     for i, path_dict in enumerate(examples["file_path"]):
         try:
             audio, sr = librosa.load(path_dict['path'], sr=config.ORNEKLEME_ORANI)
@@ -164,8 +166,10 @@ def _standalone_preprocess_function(examples, processor, augmenter=None):
                     # Augmentation hatası durumunda orijinal sesi kullan
                     pass
             
-            # Transcript kontrolü
+            # Transcript kontrolü ve normalizasyon
             transcript = str(transcripts[i]).strip() if i < len(transcripts) else ""
+            transcript = normalize_turkish_text(transcript)
+            
             if transcript:
                 audio_arrays.append(audio)
                 valid_transcripts.append(transcript)
@@ -422,7 +426,8 @@ class PersonalizedTrainer:
         
         # Var olmayan dosyaları filtrele
         original_size = len(df)
-        df = df[df["file_path"].apply(os.path.exists)]
+        df = df[df["file_path"].notna()]
+        df = df[df["file_path"].apply(lambda x: os.path.exists(str(x)))]
         if len(df) < original_size:
             print(f"   {original_size - len(df)} adet bulunamayan ses dosyası atlandı.")
 
@@ -442,7 +447,10 @@ class PersonalizedTrainer:
         # Boş transkriptleri filtrele
         df = df[df['transcript'].notna() & (df['transcript'].str.strip() != '')]
         
+        from datasets import Value
         dataset = Dataset.from_pandas(df)
+        # Force string type before casting to Audio to avoid large_string issues
+        dataset = dataset.cast_column("file_path", Value("string"))
         dataset = dataset.cast_column("file_path", Audio(sampling_rate=config.ORNEKLEME_ORANI, decode=False))
         
         print(f"   📈 {split.upper()} veri seti boyutu: {len(dataset)} kayıt")
@@ -479,8 +487,28 @@ class PersonalizedTrainer:
         avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
         
         # WER ve CER hesapla
-        wer = self.wer_metric.compute(predictions=all_predictions, references=all_references)
-        cer = self.cer_metric.compute(predictions=all_predictions, references=all_references)
+        from src.utils.utils import normalize_turkish_text
+        
+        normalized_predictions = [normalize_turkish_text(p) for p in all_predictions]
+        normalized_references = [normalize_turkish_text(r) for r in all_references]
+        
+        # Filtrele: Boş referanslar WER hesaplamasında hata verebilir veya anlamsızdır
+        valid_indices = [i for i, r in enumerate(normalized_references) if r.strip()]
+        if not valid_indices:
+            return avg_loss, 1.0, 1.0
+            
+        final_preds = [normalized_predictions[i] for i in valid_indices]
+        final_refs = [normalized_references[i] for i in valid_indices]
+        
+        wer = self.wer_metric.compute(predictions=final_preds, references=final_refs)
+        cer = self.cer_metric.compute(predictions=final_preds, references=final_refs)
+        
+        # Sample predictions log
+        from tqdm import tqdm
+        tqdm.write(f"\n      Örnek Tahminler (Batch {num_batches}):")
+        for i in range(min(3, len(final_preds))):
+            tqdm.write(f"         REF: '{final_refs[i]}'")
+            tqdm.write(f"         PRD: '{final_preds[i]}'")
         
         self.model.train()
         return avg_loss, wer, cer
@@ -512,7 +540,8 @@ class PersonalizedTrainer:
 
         # Veri ön işleme (sistem kaynaklarına göre optimize)
         num_proc = min(config.DATA_PREPROCESSING_NUM_PROC, os.cpu_count() or 1)
-        print(f"\n⚙️  Veri ön işleme {num_proc} CPU çekirdeği ile paralelleştiriliyor...")
+        map_num_proc = num_proc if num_proc > 1 else None
+        print(f"\n⚙️  Veri ön işleme {'paralelleştiriliyor' if map_num_proc else 'ana süreçte yapılıyor'}...")
         
         try:
             # Training set preprocessing (with augmentation)
@@ -522,7 +551,7 @@ class PersonalizedTrainer:
                 remove_columns=train_dataset.column_names,
                 batched=True,
                 batch_size=config.FINETUNE_BATCH_SIZE,
-                num_proc=num_proc
+                num_proc=map_num_proc
             )
             
             # Boş örnekleri filtrele

@@ -11,7 +11,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
-const String kBaseUrl = 'http://91.241.50.187:8001';
+const String kBaseUrl = 'http://88.255.236.143:8001';
 const String kUserId = 'FurkanV1';
 
 // ─── Uygulama ────────────────────────────────────────────────────────────────
