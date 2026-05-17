@@ -58,7 +58,8 @@ Future<File> _recordWav(int seconds) async {
   }
 
   await recorder.start(
-    const RecordConfig(encoder: AudioEncoder.wav, numChannels: 1, sampleRate: 16000),
+    const RecordConfig(
+        encoder: AudioEncoder.wav, numChannels: 1, sampleRate: 16000),
     path: path,
   );
   await Future.delayed(Duration(seconds: seconds));
@@ -170,7 +171,8 @@ class _MainPageState extends State<MainPage>
               const SizedBox(height: 4),
               Text(
                 'Konuşma Asistanı',
-                style: TextStyle(fontSize: 14, color: cs.onSurface.withOpacity(0.55)),
+                style: TextStyle(
+                    fontSize: 14, color: cs.onSurface.withOpacity(0.55)),
               ),
               const SizedBox(height: 36),
 
@@ -294,8 +296,7 @@ class _BigButton extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(sublabel,
                       style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.82))),
+                          fontSize: 12, color: Colors.white.withOpacity(0.82))),
                 ],
               ),
             ),
@@ -475,7 +476,12 @@ class _FurkancaPanelState extends State<_FurkancaPanel> {
     } catch (e) {
       _snack('Hata: $e');
     } finally {
-      if (mounted) setState(() { _busy = false; _recording = false; _remaining = 0; });
+      if (mounted)
+        setState(() {
+          _busy = false;
+          _recording = false;
+          _remaining = 0;
+        });
     }
   }
 
@@ -494,7 +500,8 @@ class _FurkancaPanelState extends State<_FurkancaPanel> {
             'Konuş, AI konuşmanı düzeltilmiş hâle çevirsin ve yüksek sesle okusun.',
             style: TextStyle(
                 fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.65)),
+                color:
+                    Theme.of(context).colorScheme.onSurface.withOpacity(0.65)),
           ),
           const SizedBox(height: 20),
 
@@ -521,9 +528,7 @@ class _FurkancaPanelState extends State<_FurkancaPanel> {
           // Progress bar
           if (_recording) ...[
             LinearProgressIndicator(
-              value: _seconds == 0
-                  ? null
-                  : (_seconds - _remaining) / _seconds,
+              value: _seconds == 0 ? null : (_seconds - _remaining) / _seconds,
               color: accent,
             ),
             const SizedBox(height: 6),
@@ -555,9 +560,16 @@ class _FurkancaPanelState extends State<_FurkancaPanel> {
           const SizedBox(height: 24),
 
           // Sonuçlar
-          if (_recognized != null) _ResultTile(label: 'Duyulan', value: _recognized!, color: Colors.blue),
-          if (_intent != null) _ResultTile(label: 'Niyet', value: _intent!, color: Colors.purple),
-          if (_corrected != null) _ResultTile(label: 'Düzeltilmiş', value: _corrected!, color: const Color(0xFF10B981)),
+          if (_recognized != null)
+            _ResultTile(
+                label: 'Duyulan', value: _recognized!, color: Colors.blue),
+          if (_intent != null)
+            _ResultTile(label: 'Niyet', value: _intent!, color: Colors.purple),
+          if (_corrected != null)
+            _ResultTile(
+                label: 'Düzeltilmiş',
+                value: _corrected!,
+                color: const Color(0xFF10B981)),
           if (_missing.isNotEmpty)
             _ResultTile(
               label: 'Eksik Kelimeler',
@@ -664,9 +676,17 @@ class _KayitPanelState extends State<_KayitPanel> {
   Future<void> _upload() async {
     if (_busy) return;
     final word = _word?.trim() ?? '';
-    if (word.isEmpty) { _snack('Hedef kelime alınamadı.'); return; }
+    if (word.isEmpty) {
+      _snack('Hedef kelime alınamadı.');
+      return;
+    }
 
-    setState(() { _busy = true; _recording = true; _remaining = _seconds; _lastStatus = null; });
+    setState(() {
+      _busy = true;
+      _recording = true;
+      _remaining = _seconds;
+      _lastStatus = null;
+    });
 
     try {
       await _ensureMic();
@@ -678,7 +698,10 @@ class _KayitPanelState extends State<_KayitPanel> {
 
       final file = await _recordWav(_seconds);
       if (!mounted) return;
-      setState(() { _recording = false; _remaining = 0; });
+      setState(() {
+        _recording = false;
+        _remaining = 0;
+      });
 
       // POST /record
       final req = http.MultipartRequest('POST', Uri.parse('${_base()}/record'))
@@ -689,7 +712,8 @@ class _KayitPanelState extends State<_KayitPanel> {
 
       final res = await req.send();
       final respBody = await res.stream.bytesToString();
-      if (res.statusCode != 200) throw Exception('Sunucu: ${res.statusCode} $respBody');
+      if (res.statusCode != 200)
+        throw Exception('Sunucu: ${res.statusCode} $respBody');
 
       setState(() => _lastStatus = 'Kaydedildi: $word (rep $_rep)');
       _snack('Yüklendi: $word');
@@ -697,7 +721,12 @@ class _KayitPanelState extends State<_KayitPanel> {
     } catch (e) {
       _snack('Hata: $e');
     } finally {
-      if (mounted) setState(() { _busy = false; _recording = false; _remaining = 0; });
+      if (mounted)
+        setState(() {
+          _busy = false;
+          _recording = false;
+          _remaining = 0;
+        });
     }
   }
 
@@ -742,7 +771,9 @@ class _KayitPanelState extends State<_KayitPanel> {
 
           // Set seçimi
           DropdownButtonFormField<String>(
-            value: _sets.isEmpty ? null : (_sets.contains(_setFile) ? _setFile : _sets.first),
+            initialValue: _sets.isEmpty
+                ? null
+                : (_sets.contains(_setFile) ? _setFile : _sets.first),
             decoration: const InputDecoration(
               labelText: 'Kelime Seti',
               prefixIcon: Icon(Icons.list_alt_rounded),
@@ -772,12 +803,11 @@ class _KayitPanelState extends State<_KayitPanel> {
             ),
             padding: const EdgeInsets.all(20),
             child: allDone
-                ? Row(
+                ? const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.check_circle_rounded,
-                          color: accent, size: 28),
-                      const SizedBox(width: 10),
+                      Icon(Icons.check_circle_rounded, color: accent, size: 28),
+                      SizedBox(width: 10),
                       Text('Tüm kelimeler tamamlandı!',
                           style: TextStyle(
                               fontSize: 16,
@@ -797,8 +827,7 @@ class _KayitPanelState extends State<_KayitPanel> {
                       Text(
                         'Tekrar: $_rep  ·  Mevcut: $_currentCount / $_idealReps',
                         style: TextStyle(
-                            fontSize: 13,
-                            color: cs.onSurface.withOpacity(0.6)),
+                            fontSize: 13, color: cs.onSurface.withOpacity(0.6)),
                       ),
                     ],
                   ),
@@ -820,7 +849,8 @@ class _KayitPanelState extends State<_KayitPanel> {
             divisions: 5,
             label: '$_seconds sn',
             activeColor: accent,
-            onChanged: _busy ? null : (v) => setState(() => _seconds = v.round()),
+            onChanged:
+                _busy ? null : (v) => setState(() => _seconds = v.round()),
           ),
 
           // Progress bar
@@ -844,9 +874,12 @@ class _KayitPanelState extends State<_KayitPanel> {
                   borderRadius: BorderRadius.circular(14)),
             ),
             onPressed: (_busy || allDone) ? null : _upload,
-            icon: Icon(_busy ? Icons.hourglass_top : Icons.cloud_upload_rounded),
+            icon:
+                Icon(_busy ? Icons.hourglass_top : Icons.cloud_upload_rounded),
             label: Text(
-              _busy ? (_recording ? 'Kaydediliyor...' : 'Yükleniyor...') : 'Kaydet ve Yükle',
+              _busy
+                  ? (_recording ? 'Kaydediliyor...' : 'Yükleniyor...')
+                  : 'Kaydet ve Yükle',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
@@ -912,7 +945,10 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
   }
 
   Future<void> _fetchSettings() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       // GET /settings
       final res = await http.get(
@@ -924,9 +960,14 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
           _selectedModel = d['model'] ?? _selectedModel;
           _selectedAlgo = d['algorithm'] ?? _selectedAlgo;
           _selfLearning = d['self_learning'] ?? _selfLearning;
-          _learningRate = (d['learning_rate'] as num?)?.toDouble() ?? _learningRate;
-          _epochs = d['epochs'] is int ? d['epochs'] as int : int.tryParse('${d['epochs']}') ?? _epochs;
-          _batchSize = d['batch_size'] is int ? d['batch_size'] as int : int.tryParse('${d['batch_size']}') ?? _batchSize;
+          _learningRate =
+              (d['learning_rate'] as num?)?.toDouble() ?? _learningRate;
+          _epochs = d['epochs'] is int
+              ? d['epochs'] as int
+              : int.tryParse('${d['epochs']}') ?? _epochs;
+          _batchSize = d['batch_size'] is int
+              ? d['batch_size'] as int
+              : int.tryParse('${d['batch_size']}') ?? _batchSize;
         });
       }
 
@@ -978,7 +1019,10 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
   }
 
   Future<void> _startFineTune() async {
-    setState(() { _training = true; _trainStatus = 'Eğitim başlatılıyor...'; });
+    setState(() {
+      _training = true;
+      _trainStatus = 'Eğitim başlatılıyor...';
+    });
     try {
       // POST /fine-tune
       final res = await http.post(
@@ -995,12 +1039,17 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
       final d = jsonDecode(res.body) as Map<String, dynamic>;
       setState(() {
         _trainStatus = d['status']?.toString() ??
-            (res.statusCode == 200 ? 'Eğitim kuyruğa alındı.' : 'Hata: ${res.statusCode}');
+            (res.statusCode == 200
+                ? 'Eğitim kuyruğa alındı.'
+                : 'Hata: ${res.statusCode}');
       });
     } catch (e) {
       setState(() => _trainStatus = 'Hata: $e');
     } finally {
-      if (mounted) setState(() { _training = false; });
+      if (mounted)
+        setState(() {
+          _training = false;
+        });
     }
   }
 
@@ -1014,7 +1063,10 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
       icon: Icons.tune_rounded,
       iconColor: accent,
       body: _loading
-          ? const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+          ? const Center(
+              child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator()))
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -1029,16 +1081,18 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
                     ),
                     child: Text(_modelInfo,
                         style: TextStyle(
-                            fontSize: 12, color: cs.onSurface.withOpacity(0.8))),
+                            fontSize: 12,
+                            color: cs.onSurface.withOpacity(0.8))),
                   ),
                 if (_error != null) ...[
                   const SizedBox(height: 8),
-                  Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                  Text(_error!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12)),
                 ],
                 const SizedBox(height: 20),
 
                 // ── Model seçimi ──
-                _SectionHeader(label: 'Model Tercihi'),
+                const _SectionHeader(label: 'Model Tercihi'),
                 const SizedBox(height: 10),
                 SegmentedButton<String>(
                   segments: _modelOptions
@@ -1051,11 +1105,12 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
                 const SizedBox(height: 20),
 
                 // ── Algoritma ──
-                _SectionHeader(label: 'Fine-Tune Algoritması'),
+                const _SectionHeader(label: 'Fine-Tune Algoritması'),
                 const SizedBox(height: 10),
                 SegmentedButton<String>(
                   segments: _algoOptions
-                      .map((a) => ButtonSegment(value: a, label: Text(a.toUpperCase())))
+                      .map((a) =>
+                          ButtonSegment(value: a, label: Text(a.toUpperCase())))
                       .toList(),
                   selected: {_selectedAlgo},
                   onSelectionChanged: (s) =>
@@ -1064,7 +1119,7 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
                 const SizedBox(height: 20),
 
                 // ── Self-learning ──
-                _SectionHeader(label: 'Kendi Kendine Öğrenme'),
+                const _SectionHeader(label: 'Kendi Kendine Öğrenme'),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Self-learning aktif'),
@@ -1072,16 +1127,17 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
                     _selfLearning
                         ? 'Yeni kayıtlar otomatik modele eklenir'
                         : 'Manuel eğitim gerektirir',
-                    style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.6)),
+                    style: TextStyle(
+                        fontSize: 12, color: cs.onSurface.withOpacity(0.6)),
                   ),
                   value: _selfLearning,
-                  activeColor: accent,
+                  activeThumbColor: accent,
                   onChanged: (v) => setState(() => _selfLearning = v),
                 ),
                 const SizedBox(height: 12),
 
                 // ── Hiperparametreler ──
-                _SectionHeader(label: 'Hiperparametreler'),
+                const _SectionHeader(label: 'Hiperparametreler'),
                 const SizedBox(height: 10),
 
                 // Learning rate
@@ -1109,7 +1165,8 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Epoch Sayısı'),
-                    Text('$_epochs', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text('$_epochs',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                   ],
                 ),
                 Slider(
@@ -1126,7 +1183,8 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Batch Size'),
-                    Text('$_batchSize', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text('$_batchSize',
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                   ],
                 ),
                 Slider(
@@ -1142,7 +1200,10 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
 
                 // Eğitim durumu
                 if (_trainStatus.isNotEmpty) ...[
-                  _ResultTile(label: 'Eğitim Durumu', value: _trainStatus, color: accent),
+                  _ResultTile(
+                      label: 'Eğitim Durumu',
+                      value: _trainStatus,
+                      color: accent),
                   const SizedBox(height: 12),
                 ],
 
@@ -1155,10 +1216,12 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
                         borderRadius: BorderRadius.circular(14)),
                   ),
                   onPressed: (_saving || _training) ? null : _saveSettings,
-                  icon: Icon(_saving ? Icons.hourglass_top : Icons.save_rounded),
+                  icon:
+                      Icon(_saving ? Icons.hourglass_top : Icons.save_rounded),
                   label: Text(
                     _saving ? 'Kaydediliyor...' : 'Ayarları Kaydet',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -1167,7 +1230,7 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
                 OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: accent,
-                    side: BorderSide(color: accent),
+                    side: const BorderSide(color: accent),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
@@ -1178,7 +1241,8 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
                       : Icons.model_training_rounded),
                   label: Text(
                     _training ? 'Eğitim başlatıldı...' : 'Fine-Tune Başlat',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
@@ -1215,9 +1279,7 @@ class _ResultTile extends StatelessWidget {
         children: [
           Text(label,
               style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: color)),
+                  fontSize: 11, fontWeight: FontWeight.w700, color: color)),
           const SizedBox(height: 6),
           SelectableText(
             value,
