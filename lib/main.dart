@@ -300,74 +300,6 @@ class _BigButton extends StatelessWidget {
   }
 }
 
-// ─── Panel şablonu ────────────────────────────────────────────────────────────
-class _Sheet extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Color iconColor;
-  final Widget body;
-
-  const _Sheet({
-    required this.title,
-    required this.icon,
-    required this.iconColor,
-    required this.body,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.92,
-      ),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: cs.onSurface.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-            child: Row(
-              children: [
-                Icon(icon, color: iconColor, size: 26),
-                const SizedBox(width: 10),
-                Text(title,
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface)),
-              ],
-            ),
-          ),
-          const Divider(height: 24),
-          Flexible(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-              child: body,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // 1) FURKANCA PANELİ
 // ════════════════════════════════════════════════════════════════════════════
@@ -487,88 +419,93 @@ class _FurkancaPageState extends State<_FurkancaPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-          Text(
-            'Konuş, AI konuşmanı düzeltilmiş hâle çevirsin ve yüksek sesle okusun.',
-            style: TextStyle(
-                fontSize: 13,
-                color:
-                    Theme.of(context).colorScheme.onSurface.withOpacity(0.65)),
-          ),
-          const SizedBox(height: 20),
-
-          // Süre slider
-          Row(
-            children: [
-              const Icon(Icons.timer_outlined, size: 18),
-              const SizedBox(width: 8),
-              Text('Kayıt süresi: $_seconds sn'),
-            ],
-          ),
-          Slider(
-            value: _seconds.toDouble(),
-            min: 2,
-            max: 12,
-            divisions: 10,
-            label: '$_seconds sn',
-            activeColor: accent,
-            onChanged:
-                _busy ? null : (v) => setState(() => _seconds = v.round()),
-          ),
-          const SizedBox(height: 8),
-
-          // Progress bar
-          if (_recording) ...[
-            LinearProgressIndicator(
-              value: _seconds == 0 ? null : (_seconds - _remaining) / _seconds,
-              color: accent,
-            ),
-            const SizedBox(height: 6),
             Text(
-              'Kayıt alınıyor... $_remaining sn kaldı',
-              style: const TextStyle(fontSize: 12),
+              'Konuş, AI konuşmanı düzeltilmiş hâle çevirsin ve yüksek sesle okusun.',
+              style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withOpacity(0.65)),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
+
+            // Süre slider
+            Row(
+              children: [
+                const Icon(Icons.timer_outlined, size: 18),
+                const SizedBox(width: 8),
+                Text('Kayıt süresi: $_seconds sn'),
+              ],
+            ),
+            Slider(
+              value: _seconds.toDouble(),
+              min: 2,
+              max: 12,
+              divisions: 10,
+              label: '$_seconds sn',
+              activeColor: accent,
+              onChanged:
+                  _busy ? null : (v) => setState(() => _seconds = v.round()),
+            ),
+            const SizedBox(height: 8),
+
+            // Progress bar
+            if (_recording) ...[
+              LinearProgressIndicator(
+                value:
+                    _seconds == 0 ? null : (_seconds - _remaining) / _seconds,
+                color: accent,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Kayıt alınıyor... $_remaining sn kaldı',
+                style: const TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Ana buton
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: accent,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: _busy ? null : _run,
+              icon: Icon(_busy ? Icons.hourglass_top : Icons.mic_rounded),
+              label: Text(
+                _busy
+                    ? (_recording ? 'Kaydediliyor...' : 'İşleniyor...')
+                    : 'Konuşmaya Başla',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Sonuçlar
+            if (_recognized != null)
+              _ResultTile(
+                  label: 'Duyulan', value: _recognized!, color: Colors.blue),
+            if (_intent != null)
+              _ResultTile(
+                  label: 'Niyet', value: _intent!, color: Colors.purple),
+            if (_corrected != null)
+              _ResultTile(
+                  label: 'Düzeltilmiş',
+                  value: _corrected!,
+                  color: const Color(0xFF10B981)),
+            if (_missing.isNotEmpty)
+              _ResultTile(
+                label: 'Eksik Kelimeler',
+                value: _missing.join(', '),
+                color: Colors.orange,
+              ),
           ],
-
-          // Ana buton
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: accent,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-            onPressed: _busy ? null : _run,
-            icon: Icon(_busy ? Icons.hourglass_top : Icons.mic_rounded),
-            label: Text(
-              _busy
-                  ? (_recording ? 'Kaydediliyor...' : 'İşleniyor...')
-                  : 'Konuşmaya Başla',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // Sonuçlar
-          if (_recognized != null)
-            _ResultTile(
-                label: 'Duyulan', value: _recognized!, color: Colors.blue),
-          if (_intent != null)
-            _ResultTile(label: 'Niyet', value: _intent!, color: Colors.purple),
-          if (_corrected != null)
-            _ResultTile(
-                label: 'Düzeltilmiş',
-                value: _corrected!,
-                color: const Color(0xFF10B981)),
-          if (_missing.isNotEmpty)
-            _ResultTile(
-              label: 'Eksik Kelimeler',
-              value: _missing.join(', '),
-              color: Colors.orange,
-            ),
-        ],
-      ),
+        ),
       ),
     );
   }
@@ -740,156 +677,160 @@ class _KayitPageState extends State<_KayitPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-          // İlerleme
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('İlerleme: $_completedWords / $_totalWords kelime'),
-              Text('${(progress * 100).toStringAsFixed(0)}%',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              color: accent,
-              backgroundColor: accent.withOpacity(0.15),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Set seçimi
-          DropdownButtonFormField<String>(
-            initialValue: _sets.isEmpty
-                ? null
-                : (_sets.contains(_setFile) ? _setFile : _sets.first),
-            decoration: const InputDecoration(
-              labelText: 'Kelime Seti',
-              prefixIcon: Icon(Icons.list_alt_rounded),
-              border: OutlineInputBorder(),
-            ),
-            items: (_sets.isEmpty ? [_setFile] : _sets)
-                .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                .toList(),
-            onChanged: _busy
-                ? null
-                : (v) async {
-                    if (v == null) return;
-                    setState(() => _setFile = v);
-                    await Future.wait([_refreshWord(), _refreshProgress()]);
-                  },
-          ),
-          const SizedBox(height: 16),
-
-          // Hedef kelime kartı
-          Container(
-            decoration: BoxDecoration(
-              color: allDone
-                  ? accent.withOpacity(0.12)
-                  : cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: accent.withOpacity(0.4)),
-            ),
-            padding: const EdgeInsets.all(20),
-            child: allDone
-                ? const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.check_circle_rounded, color: accent, size: 28),
-                      SizedBox(width: 10),
-                      Text('Tüm kelimeler tamamlandı!',
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: accent)),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      Text(
-                        _word ?? '-',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 30, fontWeight: FontWeight.w900),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Tekrar: $_rep  ·  Mevcut: $_currentCount / $_idealReps',
-                        style: TextStyle(
-                            fontSize: 13, color: cs.onSurface.withOpacity(0.6)),
-                      ),
-                    ],
-                  ),
-          ),
-          const SizedBox(height: 16),
-
-          // Süre slider
-          Row(
-            children: [
-              const Icon(Icons.timer_outlined, size: 18),
-              const SizedBox(width: 8),
-              Text('Kayıt süresi: $_seconds sn'),
-            ],
-          ),
-          Slider(
-            value: _seconds.toDouble(),
-            min: 1,
-            max: 6,
-            divisions: 5,
-            label: '$_seconds sn',
-            activeColor: accent,
-            onChanged:
-                _busy ? null : (v) => setState(() => _seconds = v.round()),
-          ),
-
-          // Progress bar
-          if (_recording) ...[
-            LinearProgressIndicator(
-              value: _seconds == 0 ? null : (_seconds - _remaining) / _seconds,
-              color: accent,
+            // İlerleme
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('İlerleme: $_completedWords / $_totalWords kelime'),
+                Text('${(progress * 100).toStringAsFixed(0)}%',
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
+              ],
             ),
             const SizedBox(height: 6),
-            Text('Kayıt alınıyor... $_remaining sn kaldı',
-                style: const TextStyle(fontSize: 12)),
-            const SizedBox(height: 8),
-          ],
-
-          const SizedBox(height: 8),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: accent,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 8,
+                color: accent,
+                backgroundColor: accent.withOpacity(0.15),
+              ),
             ),
-            onPressed: (_busy || allDone) ? null : _upload,
-            icon:
-                Icon(_busy ? Icons.hourglass_top : Icons.cloud_upload_rounded),
-            label: Text(
-              _busy
-                  ? (_recording ? 'Kaydediliyor...' : 'Yükleniyor...')
-                  : 'Kaydet ve Yükle',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-          ),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: _busy
-                ? null
-                : () => Future.wait([_refreshWord(), _refreshProgress()]),
-            icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Yenile'),
-          ),
-
-          if (_lastStatus != null) ...[
             const SizedBox(height: 16),
-            _ResultTile(label: 'Durum', value: _lastStatus!, color: accent),
+
+            // Set seçimi
+            DropdownButtonFormField<String>(
+              initialValue: _sets.isEmpty
+                  ? null
+                  : (_sets.contains(_setFile) ? _setFile : _sets.first),
+              decoration: const InputDecoration(
+                labelText: 'Kelime Seti',
+                prefixIcon: Icon(Icons.list_alt_rounded),
+                border: OutlineInputBorder(),
+              ),
+              items: (_sets.isEmpty ? [_setFile] : _sets)
+                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                  .toList(),
+              onChanged: _busy
+                  ? null
+                  : (v) async {
+                      if (v == null) return;
+                      setState(() => _setFile = v);
+                      await Future.wait([_refreshWord(), _refreshProgress()]);
+                    },
+            ),
+            const SizedBox(height: 16),
+
+            // Hedef kelime kartı
+            Container(
+              decoration: BoxDecoration(
+                color: allDone
+                    ? accent.withOpacity(0.12)
+                    : cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: accent.withOpacity(0.4)),
+              ),
+              padding: const EdgeInsets.all(20),
+              child: allDone
+                  ? const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check_circle_rounded,
+                            color: accent, size: 28),
+                        SizedBox(width: 10),
+                        Text('Tüm kelimeler tamamlandı!',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: accent)),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        Text(
+                          _word ?? '-',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: 30, fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Tekrar: $_rep  ·  Mevcut: $_currentCount / $_idealReps',
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: cs.onSurface.withOpacity(0.6)),
+                        ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 16),
+
+            // Süre slider
+            Row(
+              children: [
+                const Icon(Icons.timer_outlined, size: 18),
+                const SizedBox(width: 8),
+                Text('Kayıt süresi: $_seconds sn'),
+              ],
+            ),
+            Slider(
+              value: _seconds.toDouble(),
+              min: 1,
+              max: 6,
+              divisions: 5,
+              label: '$_seconds sn',
+              activeColor: accent,
+              onChanged:
+                  _busy ? null : (v) => setState(() => _seconds = v.round()),
+            ),
+
+            // Progress bar
+            if (_recording) ...[
+              LinearProgressIndicator(
+                value:
+                    _seconds == 0 ? null : (_seconds - _remaining) / _seconds,
+                color: accent,
+              ),
+              const SizedBox(height: 6),
+              Text('Kayıt alınıyor... $_remaining sn kaldı',
+                  style: const TextStyle(fontSize: 12)),
+              const SizedBox(height: 8),
+            ],
+
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: accent,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: (_busy || allDone) ? null : _upload,
+              icon: Icon(
+                  _busy ? Icons.hourglass_top : Icons.cloud_upload_rounded),
+              label: Text(
+                _busy
+                    ? (_recording ? 'Kaydediliyor...' : 'Yükleniyor...')
+                    : 'Kaydet ve Yükle',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _busy
+                  ? null
+                  : () => Future.wait([_refreshWord(), _refreshProgress()]),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Yenile'),
+            ),
+
+            if (_lastStatus != null) ...[
+              const SizedBox(height: 16),
+              _ResultTile(label: 'Durum', value: _lastStatus!, color: accent),
+            ],
           ],
-        ],
-      ),
+        ),
       ),
     );
   }
@@ -1063,183 +1004,184 @@ class _AyarlarPageState extends State<_AyarlarPage> {
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                // Model bilgi kartı
-                if (_modelInfo.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: accent.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: accent.withOpacity(0.3)),
+                  // Model bilgi kartı
+                  if (_modelInfo.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: accent.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: accent.withOpacity(0.3)),
+                      ),
+                      child: Text(_modelInfo,
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurface.withOpacity(0.8))),
                     ),
-                    child: Text(_modelInfo,
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: cs.onSurface.withOpacity(0.8))),
+                  if (_error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(_error!,
+                        style:
+                            const TextStyle(color: Colors.red, fontSize: 12)),
+                  ],
+                  const SizedBox(height: 20),
+
+                  // ── Model seçimi ──
+                  const _SectionHeader(label: 'Model Tercihi'),
+                  const SizedBox(height: 10),
+                  SegmentedButton<String>(
+                    segments: _modelOptions
+                        .map((m) => ButtonSegment(value: m, label: Text(m)))
+                        .toList(),
+                    selected: {_selectedModel},
+                    onSelectionChanged: (s) =>
+                        setState(() => _selectedModel = s.first),
                   ),
-                if (_error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(_error!,
-                      style: const TextStyle(color: Colors.red, fontSize: 12)),
-                ],
-                const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-                // ── Model seçimi ──
-                const _SectionHeader(label: 'Model Tercihi'),
-                const SizedBox(height: 10),
-                SegmentedButton<String>(
-                  segments: _modelOptions
-                      .map((m) => ButtonSegment(value: m, label: Text(m)))
-                      .toList(),
-                  selected: {_selectedModel},
-                  onSelectionChanged: (s) =>
-                      setState(() => _selectedModel = s.first),
-                ),
-                const SizedBox(height: 20),
-
-                // ── Algoritma ──
-                const _SectionHeader(label: 'Fine-Tune Algoritması'),
-                const SizedBox(height: 10),
-                SegmentedButton<String>(
-                  segments: _algoOptions
-                      .map((a) =>
-                          ButtonSegment(value: a, label: Text(a.toUpperCase())))
-                      .toList(),
-                  selected: {_selectedAlgo},
-                  onSelectionChanged: (s) =>
-                      setState(() => _selectedAlgo = s.first),
-                ),
-                const SizedBox(height: 20),
-
-                // ── Self-learning ──
-                const _SectionHeader(label: 'Kendi Kendine Öğrenme'),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Self-learning aktif'),
-                  subtitle: Text(
-                    _selfLearning
-                        ? 'Yeni kayıtlar otomatik modele eklenir'
-                        : 'Manuel eğitim gerektirir',
-                    style: TextStyle(
-                        fontSize: 12, color: cs.onSurface.withOpacity(0.6)),
+                  // ── Algoritma ──
+                  const _SectionHeader(label: 'Fine-Tune Algoritması'),
+                  const SizedBox(height: 10),
+                  SegmentedButton<String>(
+                    segments: _algoOptions
+                        .map((a) => ButtonSegment(
+                            value: a, label: Text(a.toUpperCase())))
+                        .toList(),
+                    selected: {_selectedAlgo},
+                    onSelectionChanged: (s) =>
+                        setState(() => _selectedAlgo = s.first),
                   ),
-                  value: _selfLearning,
-                  activeThumbColor: accent,
-                  onChanged: (v) => setState(() => _selfLearning = v),
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 20),
 
-                // ── Hiperparametreler ──
-                const _SectionHeader(label: 'Hiperparametreler'),
-                const SizedBox(height: 10),
-
-                // Learning rate
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Learning Rate'),
-                    Text(
-                      _learningRate.toStringAsExponential(1),
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                  // ── Self-learning ──
+                  const _SectionHeader(label: 'Kendi Kendine Öğrenme'),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Self-learning aktif'),
+                    subtitle: Text(
+                      _selfLearning
+                          ? 'Yeni kayıtlar otomatik modele eklenir'
+                          : 'Manuel eğitim gerektirir',
+                      style: TextStyle(
+                          fontSize: 12, color: cs.onSurface.withOpacity(0.6)),
                     ),
-                  ],
-                ),
-                Slider(
-                  value: _learningRate,
-                  min: 0.000001,
-                  max: 0.001,
-                  divisions: 20,
-                  activeColor: accent,
-                  onChanged: (v) => setState(() => _learningRate = v),
-                ),
-
-                // Epochs
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Epoch Sayısı'),
-                    Text('$_epochs',
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                  ],
-                ),
-                Slider(
-                  value: _epochs.toDouble(),
-                  min: 1,
-                  max: 20,
-                  divisions: 19,
-                  activeColor: accent,
-                  onChanged: (v) => setState(() => _epochs = v.round()),
-                ),
-
-                // Batch size
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Batch Size'),
-                    Text('$_batchSize',
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                  ],
-                ),
-                Slider(
-                  value: _batchSize.toDouble(),
-                  min: 1,
-                  max: 32,
-                  divisions: 5,
-                  activeColor: accent,
-                  onChanged: (v) => setState(() => _batchSize = v.round()),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Eğitim durumu
-                if (_trainStatus.isNotEmpty) ...[
-                  _ResultTile(
-                      label: 'Eğitim Durumu',
-                      value: _trainStatus,
-                      color: accent),
+                    value: _selfLearning,
+                    activeThumbColor: accent,
+                    onChanged: (v) => setState(() => _selfLearning = v),
+                  ),
                   const SizedBox(height: 12),
+
+                  // ── Hiperparametreler ──
+                  const _SectionHeader(label: 'Hiperparametreler'),
+                  const SizedBox(height: 10),
+
+                  // Learning rate
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Learning Rate'),
+                      Text(
+                        _learningRate.toStringAsExponential(1),
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: _learningRate,
+                    min: 0.000001,
+                    max: 0.001,
+                    divisions: 20,
+                    activeColor: accent,
+                    onChanged: (v) => setState(() => _learningRate = v),
+                  ),
+
+                  // Epochs
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Epoch Sayısı'),
+                      Text('$_epochs',
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                  Slider(
+                    value: _epochs.toDouble(),
+                    min: 1,
+                    max: 20,
+                    divisions: 19,
+                    activeColor: accent,
+                    onChanged: (v) => setState(() => _epochs = v.round()),
+                  ),
+
+                  // Batch size
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Batch Size'),
+                      Text('$_batchSize',
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                  Slider(
+                    value: _batchSize.toDouble(),
+                    min: 1,
+                    max: 32,
+                    divisions: 5,
+                    activeColor: accent,
+                    onChanged: (v) => setState(() => _batchSize = v.round()),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Eğitim durumu
+                  if (_trainStatus.isNotEmpty) ...[
+                    _ResultTile(
+                        label: 'Eğitim Durumu',
+                        value: _trainStatus,
+                        color: accent),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Kaydet butonu
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: accent,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: (_saving || _training) ? null : _saveSettings,
+                    icon: Icon(
+                        _saving ? Icons.hourglass_top : Icons.save_rounded),
+                    label: Text(
+                      _saving ? 'Kaydediliyor...' : 'Ayarları Kaydet',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Fine-tune başlat
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: accent,
+                      side: const BorderSide(color: accent),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: (_saving || _training) ? null : _startFineTune,
+                    icon: Icon(_training
+                        ? Icons.hourglass_top
+                        : Icons.model_training_rounded),
+                    label: Text(
+                      _training ? 'Eğitim başlatıldı...' : 'Fine-Tune Başlat',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                  ),
                 ],
-
-                // Kaydet butonu
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: accent,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  onPressed: (_saving || _training) ? null : _saveSettings,
-                  icon:
-                      Icon(_saving ? Icons.hourglass_top : Icons.save_rounded),
-                  label: Text(
-                    _saving ? 'Kaydediliyor...' : 'Ayarları Kaydet',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Fine-tune başlat
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: accent,
-                    side: const BorderSide(color: accent),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
-                  onPressed: (_saving || _training) ? null : _startFineTune,
-                  icon: Icon(_training
-                      ? Icons.hourglass_top
-                      : Icons.model_training_rounded),
-                  label: Text(
-                    _training ? 'Eğitim başlatıldı...' : 'Fine-Tune Başlat',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ),
+              ),
       ),
     );
   }
