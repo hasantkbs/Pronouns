@@ -55,7 +55,7 @@ Every recording passes three validation layers before being saved:
 Common options:
 
 ```bash
-# Request 5 repetitions per word (default: 10)
+# Request 5 repetitions per word (default: 5)
 python auto_collect.py Furkan datasets/words_set/temel_kelimeler.txt --reps 5
 
 # Resume from where the session was interrupted (default behaviour)
@@ -329,7 +329,7 @@ Transfer to a GPU server — see `LINUX_SERVER_SETUP.md`.
 
 ### Low recognition accuracy
 
-- Collect more recordings (10 repetitions per word minimum).
+- Collect more recordings (5 repetitions per word minimum).
 - Re-run `train_adapter.py`.
 - Ensure recording environment is quiet.
 - Increase `NUM_FINETUNE_EPOCHS` or lower `FINETUNE_LEARNING_RATE` in `config.py`.

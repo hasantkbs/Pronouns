@@ -32,7 +32,7 @@ CONSISTENCY_CHECK_ENABLED = True
 CONSISTENCY_TOLERANCE = 0.5
 
 # --- Kayıt Tekrar Ayarları ---
-IDEAL_REPETITIONS = 10
+IDEAL_REPETITIONS = 5
 
 # --- Sistem Ayarları ---
 GECICI_DOSYA_YOLU = "temp_recording.wav"

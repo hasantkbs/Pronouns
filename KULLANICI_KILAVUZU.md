@@ -77,7 +77,7 @@ python auto_collect.py Furkan datasets/words_set/temel_kelimeler.txt
 ============================================================
          MERHABA
 ------------------------------------------------------------
-    Tekrar 1/10  |  Deneme 1/3
+    Tekrar 1/5  |  Deneme 1/3
 ============================================================
   Dinleniyor |
 ```
@@ -89,7 +89,7 @@ Kişi kelimeyi söylediğinde kayıt otomatik başlar ve biter.
 
 | Seçenek | Açıklama | Örnek |
 |---|---|---|
-| `--reps 5` | Her kelime için 5 tekrar iste (varsayılan: 10) | `--reps 5` |
+| `--reps 5` | Her kelime için 5 tekrar iste (varsayılan: 5) | `--reps 5` |
 | `--resume` | Kaldığı yerden devam et (varsayılan açık) | Ekstra yazmaya gerek yok |
 | `--no-resume` | Baştan başla, mevcut kayıtları sayma | `--no-resume` |
 | `--threshold 0.015` | Ses algılama hassasiyeti (0-1 arası) | `--threshold 0.015` |
@@ -256,7 +256,7 @@ GPU olan bir sunucuya aktarmak için `LINUX_SERVER_SETUP.md` dosyasına bakın.
 
 ### Tanıma doğruluğu düşük
 
-- Daha fazla kayıt toplayın (her kelime için en az 10 tekrar önerilir).
+- Daha fazla kayıt toplayın (her kelime için en az 5 tekrar önerilir).
 - `train_adapter.py` komutunu tekrar çalıştırın.
 - Kayıt ortamının sessiz olduğundan emin olun.
 
@@ -268,7 +268,7 @@ Tüm ayarlar `config.py` dosyasında bulunur. En sık ihtiyaç duyulan ayarlar:
 
 | Ayar | Varsayılan | Açıklama |
 |---|---|---|
-| `IDEAL_REPETITIONS` | 10 | Her kelime için hedef kayıt sayısı |
+| `IDEAL_REPETITIONS` | 5 | Her kelime için hedef kayıt sayısı |
 | `QUALITY_THRESHOLD` | 40 | Minimum kabul edilebilir kalite skoru (0-100) |
 | `AUTO_WORD_TIMEOUT_SEC` | 15 | Kelime başına bekleme süresi (saniye) |
 | `AUTO_MAX_RETRIES` | 3 | Başarısız denemede otomatik tekrar sayısı |

@@ -98,7 +98,7 @@ mkdir -p /home/user/pronouns/data/users/Furkan/words
 
 `api.py` → `POST /record` endpoint'i:
 - Her kayıt sonrası `metadata_words.csv`'ye satır ekler
-- `total_samples % IDEAL_REPETITIONS == 0` olduğunda (yani her 10 kayıtta bir)
+- `total_samples % IDEAL_REPETITIONS == 0` olduğunda (yani her 5 kayıtta bir)
   arka planda `PersonalizedTrainer.run()` otomatik başlatır
 - Bu davranışı kapatmak için `POST /settings` ile `"self_learning": false` gönder
 
