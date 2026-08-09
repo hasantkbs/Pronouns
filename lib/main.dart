@@ -12,6 +12,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'vad.dart';
+import 'pending_recordings.dart';
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
 const String kBaseUrl = 'http://10.10.108.10:8001';
@@ -615,7 +616,7 @@ class _FurkancaPageState extends State<_FurkancaPage> {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 2) KAYIT PANELİ
+// 2) KAYIT SAYFASI — cihazda biriktir, dinle/sil, sonra topluca yükle
 // ════════════════════════════════════════════════════════════════════════════
 class _KayitPage extends StatefulWidget {
   const _KayitPage();
@@ -625,15 +626,17 @@ class _KayitPage extends StatefulWidget {
 }
 
 class _KayitPageState extends State<_KayitPage> {
+  final AudioPlayer _player = AudioPlayer();
+
   String _setFile = 'wordSet.txt';
   List<String> _sets = const [];
 
   String? _word;
-  int _rep = 1;
   int _currentCount = 0;
   int _idealReps = 0;
   int _completedWords = 0;
   int _totalWords = 0;
+  bool _allWordsCoveredLocally = false;
 
   int _seconds = 2;
   bool _busy = false;
@@ -641,13 +644,27 @@ class _KayitPageState extends State<_KayitPage> {
   int _remaining = 0;
   String? _lastStatus;
 
+  PendingRecordingsStore? _store;
+
   @override
   void initState() {
     super.initState();
     _init();
   }
 
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
   Future<void> _init() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final store = PendingRecordingsStore(dir);
+    await store.load();
+    if (!mounted) return;
+    setState(() => _store = store);
+
     await _loadSets();
     await Future.wait([_refreshWord(), _refreshProgress()]);
   }
@@ -656,6 +673,9 @@ class _KayitPageState extends State<_KayitPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
+
+  List<PendingTake> _wordPending(String word) =>
+      _store?.forWord(word) ?? const [];
 
   Future<void> _loadSets() async {
     try {
@@ -672,18 +692,20 @@ class _KayitPageState extends State<_KayitPage> {
 
   Future<void> _refreshWord() async {
     try {
-      final uri = Uri.parse(
-          '${_base()}/collect/next-word?user_id=$kUserId&set_file=$_setFile');
+      final exclude = _store?.pendingWords.join(',') ?? '';
+      final uri = Uri.parse('${_base()}/collect/next-word?user_id=$kUserId'
+          '&set_file=$_setFile&exclude=${Uri.encodeQueryComponent(exclude)}');
       final res = await http.get(uri);
       final d = jsonDecode(res.body) as Map<String, dynamic>;
       if (d['error'] != null) throw Exception(d['error']);
       if (!mounted) return;
       setState(() {
         _word = d['word']?.toString();
-        _rep = _parseInt(d['rep']) ?? 1;
         _currentCount = _parseInt(d['current_count']) ?? 0;
         _idealReps = _parseInt(d['ideal_repetitions']) ?? 0;
         _totalWords = _parseInt(d['total_words']) ?? 0;
+        _allWordsCoveredLocally =
+            _word == null && (_store?.pendingWords.isNotEmpty ?? false);
       });
     } catch (e) {
       _snack('Kelime alınamadı: $e');
@@ -705,7 +727,7 @@ class _KayitPageState extends State<_KayitPage> {
     } catch (_) {}
   }
 
-  Future<void> _upload() async {
+  Future<void> _record() async {
     if (_busy) return;
     final word = _word?.trim() ?? '';
     if (word.isEmpty) {
@@ -738,31 +760,40 @@ class _KayitPageState extends State<_KayitPage> {
         _remaining = 0;
       });
 
-      // POST /record
-      final req = http.MultipartRequest('POST', Uri.parse('${_base()}/record'))
-        ..fields['user_id'] = kUserId
-        ..fields['word'] = word
-        ..fields['rep'] = _rep.toString()
-        ..files.add(await http.MultipartFile.fromPath('audio', file.path));
-
-      final res = await req.send();
-      final respBody = await res.stream.bytesToString();
-      if (res.statusCode != 200)
-        throw Exception('Sunucu: ${res.statusCode} $respBody');
-
-      setState(() => _lastStatus = 'Kaydedildi: $word (rep $_rep)');
-      _snack('Yüklendi: $word');
-      await Future.wait([_refreshWord(), _refreshProgress()]);
+      await _store!.add(word, file);
+      if (!mounted) return;
+      final count = _wordPending(word).length;
+      setState(
+          () => _lastStatus = 'Cihazda kaydedildi: $word (Tekrar $count)');
+      _snack('Cihazda kaydedildi: $word');
     } catch (e) {
       _snack('Hata: $e');
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _busy = false;
           _recording = false;
           _remaining = 0;
         });
+      }
     }
+  }
+
+  Future<void> _deleteTake(PendingTake take) async {
+    await _store?.remove(take);
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _openPendingUploads() async {
+    final store = _store;
+    if (store == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => _PendingUploadsPage(store: store)),
+    );
+    if (!mounted) return;
+    setState(() {});
+    await Future.wait([_refreshWord(), _refreshProgress()]);
   }
 
   static int? _parseInt(dynamic v) =>
@@ -775,9 +806,27 @@ class _KayitPageState extends State<_KayitPage> {
 
     final allDone = _word == null;
     final progress = _totalWords > 0 ? _completedWords / _totalWords : 0.0;
+    final pendingCount = _store?.takes.length ?? 0;
+    final wordPending =
+        _word == null ? const <PendingTake>[] : _wordPending(_word!);
+    final wordFull =
+        _word != null && (_currentCount + wordPending.length) >= _idealReps;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Kayıt')),
+      appBar: AppBar(
+        title: const Text('Kayıt'),
+        actions: [
+          IconButton(
+            tooltip: 'Bekleyen Kayıtlar',
+            onPressed: _store == null ? null : _openPendingUploads,
+            icon: Badge(
+              label: Text('$pendingCount'),
+              isLabelVisible: pendingCount > 0,
+              child: const Icon(Icons.folder_open_rounded),
+            ),
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -792,6 +841,12 @@ class _KayitPageState extends State<_KayitPage> {
                     style: const TextStyle(fontWeight: FontWeight.w700)),
               ],
             ),
+            if (pendingCount > 0) ...[
+              const SizedBox(height: 4),
+              Text('+$pendingCount kayıt cihazda bekliyor',
+                  style: TextStyle(
+                      fontSize: 12, color: cs.onSurface.withOpacity(0.5))),
+            ],
             const SizedBox(height: 6),
             ClipRRect(
               borderRadius: BorderRadius.circular(6),
@@ -838,17 +893,31 @@ class _KayitPageState extends State<_KayitPage> {
               ),
               padding: const EdgeInsets.all(20),
               child: allDone
-                  ? const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  ? Column(
                       children: [
-                        Icon(Icons.check_circle_rounded,
+                        const Icon(Icons.check_circle_rounded,
                             color: accent, size: 28),
-                        SizedBox(width: 10),
-                        Text('Tüm kelimeler tamamlandı!',
+                        const SizedBox(height: 8),
+                        Text(
+                          _allWordsCoveredLocally
+                              ? 'Bu setteki kelimeler için yerel kayıt tamamlandı.'
+                              : 'Tüm kelimeler tamamlandı!',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: accent),
+                        ),
+                        if (_allWordsCoveredLocally) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Yüklemek için sağ üstteki klasör ikonuna dokun.',
+                            textAlign: TextAlign.center,
                             style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: accent)),
+                                fontSize: 12,
+                                color: cs.onSurface.withOpacity(0.6)),
+                          ),
+                        ],
                       ],
                     )
                   : Column(
@@ -861,11 +930,43 @@ class _KayitPageState extends State<_KayitPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Tekrar: $_rep  ·  Mevcut: $_currentCount / $_idealReps',
+                          'Sıradaki Tekrar: ${_currentCount + wordPending.length + 1}'
+                          '  ·  Mevcut: ${_currentCount + wordPending.length} / $_idealReps',
                           style: TextStyle(
                               fontSize: 13,
                               color: cs.onSurface.withOpacity(0.6)),
                         ),
+                        if (wordPending.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          ...wordPending.asMap().entries.map((entry) {
+                            final take = entry.value;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Tekrar ${_currentCount + entry.key + 1} (cihazda)',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.play_arrow_rounded,
+                                        size: 20),
+                                    onPressed: () => _player
+                                        .play(DeviceFileSource(take.filePath)),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 20),
+                                    onPressed: () => _deleteTake(take),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
                       ],
                     ),
             ),
@@ -911,22 +1012,25 @@ class _KayitPageState extends State<_KayitPage> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
-              onPressed: (_busy || allDone) ? null : _upload,
-              icon: Icon(
-                  _busy ? Icons.hourglass_top : Icons.cloud_upload_rounded),
+              onPressed: (_busy || allDone || wordFull) ? null : _record,
+              icon: Icon(_busy ? Icons.hourglass_top : Icons.mic_rounded),
               label: Text(
                 _busy
-                    ? (_recording ? 'Kaydediliyor...' : 'Yükleniyor...')
-                    : 'Kaydet ve Yükle',
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ? (_recording ? 'Kaydediliyor...' : 'İşleniyor...')
+                    : 'Kaydet (Cihazda Sakla)',
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: _busy
-                  ? null
-                  : () => Future.wait([_refreshWord(), _refreshProgress()]),
+              onPressed: _busy ? null : () => _refreshWord(),
+              icon: const Icon(Icons.skip_next_rounded),
+              label: const Text('Sonraki Kelime'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _refreshProgress,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Yenile'),
             ),
@@ -935,6 +1039,200 @@ class _KayitPageState extends State<_KayitPage> {
               const SizedBox(height: 16),
               _ResultTile(label: 'Durum', value: _lastStatus!, color: accent),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 2b) BEKLEYEN KAYITLAR SAYFASI
+// ════════════════════════════════════════════════════════════════════════════
+
+enum _UploadStatus { uploading, error }
+
+class _PendingUploadsPage extends StatefulWidget {
+  final PendingRecordingsStore store;
+  const _PendingUploadsPage({required this.store});
+
+  @override
+  State<_PendingUploadsPage> createState() => _PendingUploadsPageState();
+}
+
+class _PendingUploadsPageState extends State<_PendingUploadsPage> {
+  final AudioPlayer _player = AudioPlayer();
+  bool _uploadingAll = false;
+  final Map<String, _UploadStatus> _status = {};
+  final Map<String, String> _errors = {};
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _deleteTake(PendingTake take) async {
+    await widget.store.remove(take);
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _uploadAll() async {
+    if (_uploadingAll) return;
+    setState(() => _uploadingAll = true);
+
+    final takes = List<PendingTake>.from(widget.store.takes);
+    for (final take in takes) {
+      setState(() => _status[take.filePath] = _UploadStatus.uploading);
+      try {
+        final req =
+            http.MultipartRequest('POST', Uri.parse('${_base()}/record'))
+              ..fields['user_id'] = kUserId
+              ..fields['word'] = take.word
+              ..files.add(
+                  await http.MultipartFile.fromPath('audio', take.filePath));
+
+        final res = await req.send();
+        final body = await res.stream.bytesToString();
+        if (res.statusCode != 200) {
+          throw Exception('Sunucu: ${res.statusCode} $body');
+        }
+
+        await widget.store.remove(take);
+        if (!mounted) return;
+        setState(() => _status.remove(take.filePath));
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _status[take.filePath] = _UploadStatus.error;
+          _errors[take.filePath] = '$e';
+        });
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _uploadingAll = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF10B981);
+    final cs = Theme.of(context).colorScheme;
+    final takes = widget.store.takes;
+
+    final byWord = <String, List<PendingTake>>{};
+    for (final t in takes) {
+      byWord.putIfAbsent(t.word, () => []).add(t);
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Bekleyen Kayıtlar')),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '${takes.length} kayıt, ${byWord.length} kelime bekliyor.',
+              style: TextStyle(
+                  fontSize: 13, color: cs.onSurface.withOpacity(0.65)),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: accent,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: (_uploadingAll || takes.isEmpty) ? null : _uploadAll,
+              icon: Icon(_uploadingAll
+                  ? Icons.hourglass_top
+                  : Icons.cloud_upload_rounded),
+              label: Text(
+                _uploadingAll ? 'Yükleniyor...' : 'Tümünü Yükle',
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Expanded(
+              child: takes.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Bekleyen kayıt yok.',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: cs.onSurface.withOpacity(0.4)),
+                      ),
+                    )
+                  : ListView(
+                      children: byWord.entries.map((entry) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                entry.key,
+                                style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 6),
+                              ...entry.value.asMap().entries.map((e) {
+                                final take = e.value;
+                                final status = _status[take.filePath];
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                          child: Text('Tekrar ${e.key + 1}')),
+                                      if (status == _UploadStatus.uploading)
+                                        const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2),
+                                        )
+                                      else if (status == _UploadStatus.error)
+                                        Tooltip(
+                                          message:
+                                              _errors[take.filePath] ??
+                                                  'Hata',
+                                          child: const Icon(
+                                              Icons.error_outline_rounded,
+                                              color: Colors.red,
+                                              size: 20),
+                                        )
+                                      else ...[
+                                        IconButton(
+                                          icon: const Icon(
+                                              Icons.play_arrow_rounded,
+                                              size: 20),
+                                          onPressed: () => _player.play(
+                                              DeviceFileSource(
+                                                  take.filePath)),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(
+                                              Icons.delete_outline_rounded,
+                                              size: 20),
+                                          onPressed: () => _deleteTake(take),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+            ),
           ],
         ),
       ),
