@@ -8,7 +8,7 @@ import os
 import uuid
 import shutil
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Set
 import csv
 
 import config
@@ -130,18 +130,24 @@ def _read_word_set_file(set_file: str) -> List[str]:
     return lines
 
 
-def _get_next_word_and_rep(user_id: str, set_file: str) -> Dict[str, Any]:
+def _get_next_word_and_rep(user_id: str, set_file: str, exclude: Optional[Set[str]] = None) -> Dict[str, Any]:
     """
     collect_data.py'deki resume/eksik kayıt mantığının API versiyonu:
     - Setteki kelimeleri sırayla gezer
     - metadata_words.csv'den o kelime için kaç kayıt var bakar
     - IDEAL_REPETITIONS tamamlanmamışsa o kelimeyi + sıradaki rep'i döndürür
+    - [exclude] içindeki kelimeler atlanır (mobil tarafta cihazda bekleyen
+      kayıtları olan kelimeler için kullanılır; kullanıcı yüklemeyi
+      beklemeden bir sonraki kelimeye geçebilsin diye)
     """
     words = _read_word_set_file(set_file)
     details = _get_recorded_details_words(user_id)
     ideal = int(config.IDEAL_REPETITIONS)
+    exclude = exclude or set()
 
     for w in words:
+        if w in exclude:
+            continue
         current = int(details.get(w, 0))
         if current < ideal:
             return {
@@ -275,12 +281,15 @@ async def list_word_sets():
 
 
 @app.get("/collect/next-word")
-async def get_next_word(user_id: str, set_file: str = "wordSet.txt"):
+async def get_next_word(user_id: str, set_file: str = "wordSet.txt", exclude: str = ""):
     """
     Mobil tarafın 'collect_data.py' akışına benzer biçimde sıradaki kelimeyi alması için.
+    `exclude`: virgülle ayrılmış, atlanacak kelimeler (cihazda bekleyen kayıtları
+    olan kelimeler için — kullanıcı yüklemeden bir sonraki kelimeye geçebilsin).
     """
     try:
-        return _get_next_word_and_rep(user_id=user_id, set_file=set_file)
+        exclude_set = {w.strip() for w in exclude.split(",") if w.strip()}
+        return _get_next_word_and_rep(user_id=user_id, set_file=set_file, exclude=exclude_set)
     except Exception as e:
         return {"error": str(e)}
 
