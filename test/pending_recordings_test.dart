@@ -98,4 +98,21 @@ void main() {
     expect(File(take2.filePath).existsSync(), isTrue);
     expect(store.takes, hasLength(2));
   });
+
+  test('_save() leaves no leftover .tmp file after add()', () async {
+    final store = PendingRecordingsStore(tempDir);
+    await store.load();
+    await store.add('elma', writeFakeAudio('rec1.wav'));
+
+    final manifestFile = File('${tempDir.path}/pending_recordings/manifest.json');
+    final tmpFile = File('${tempDir.path}/pending_recordings/manifest.json.tmp');
+
+    expect(manifestFile.existsSync(), isTrue);
+    expect(tmpFile.existsSync(), isFalse);
+
+    // Manifest content is still valid and loadable after the atomic write.
+    final store2 = PendingRecordingsStore(tempDir);
+    await store2.load();
+    expect(store2.takes, hasLength(1));
+  });
 }

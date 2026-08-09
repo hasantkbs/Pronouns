@@ -58,7 +58,9 @@ class PendingRecordingsStore {
   Future<void> _save() async {
     await _recordingsDir.create(recursive: true);
     final content = jsonEncode(_takes.map((t) => t.toJson()).toList());
-    await _manifestFile.writeAsString(content);
+    final tmpFile = File('${_manifestFile.path}.tmp');
+    await tmpFile.writeAsString(content);
+    await tmpFile.rename(_manifestFile.path);
   }
 
   List<PendingTake> forWord(String word) =>
