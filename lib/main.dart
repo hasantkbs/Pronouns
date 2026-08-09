@@ -46,7 +46,15 @@ Future<void> _ensureMic() async {
   if (!s.isGranted) throw Exception('Mikrofon izni reddedildi.');
 }
 
-Future<File> _recordWav(int seconds) async {
+/// Aktif bir kayıt oturumunu temsil eder. Mikrofon [_startRecording] ile
+/// hemen açılır; [_stopRecording] çağrılana kadar (geri sayım süresince)
+/// gerçekten kayıt almaya devam eder.
+class _RecordingSession {
+  final AudioRecorder recorder;
+  const _RecordingSession(this.recorder);
+}
+
+Future<_RecordingSession> _startRecording() async {
   final recorder = AudioRecorder();
   final dir = await getTemporaryDirectory();
   final path = '${dir.path}/rec_${DateTime.now().millisecondsSinceEpoch}.wav';
@@ -62,9 +70,12 @@ Future<File> _recordWav(int seconds) async {
         encoder: AudioEncoder.wav, numChannels: 1, sampleRate: 16000),
     path: path,
   );
-  await Future.delayed(Duration(seconds: seconds));
-  final out = await recorder.stop();
-  await recorder.dispose();
+  return _RecordingSession(recorder);
+}
+
+Future<File> _stopRecording(_RecordingSession session) async {
+  final out = await session.recorder.stop();
+  await session.recorder.dispose();
 
   if (out == null) throw Exception('Kayıt dosyası oluşturulamadı.');
   return File(out);
@@ -348,14 +359,15 @@ class _FurkancaPageState extends State<_FurkancaPage> {
     try {
       await _ensureMic();
 
-      // Geri sayım
+      // Mikrofon geri sayımla eş zamanlı açılır: kayıt hemen başlar,
+      // geri sayım gerçek kayıt penceresini gösterir.
+      final session = await _startRecording();
       for (var i = _seconds; i > 0; i--) {
         if (!mounted) return;
         setState(() => _remaining = i);
         await Future.delayed(const Duration(seconds: 1));
       }
-
-      final file = await _recordWav(_seconds);
+      final file = await _stopRecording(session);
       if (!mounted) return;
       setState(() {
         _recording = false;
@@ -619,13 +631,16 @@ class _KayitPageState extends State<_KayitPage> {
 
     try {
       await _ensureMic();
+
+      // Mikrofon geri sayımla eş zamanlı açılır: kayıt hemen başlar,
+      // geri sayım gerçek kayıt penceresini gösterir.
+      final session = await _startRecording();
       for (var i = _seconds; i > 0; i--) {
         if (!mounted) return;
         setState(() => _remaining = i);
         await Future.delayed(const Duration(seconds: 1));
       }
-
-      final file = await _recordWav(_seconds);
+      final file = await _stopRecording(session);
       if (!mounted) return;
       setState(() {
         _recording = false;
