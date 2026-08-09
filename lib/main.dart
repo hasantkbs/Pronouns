@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show File;
+import 'dart:typed_data' show Uint8List;
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +10,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+import 'vad.dart';
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
 const String kBaseUrl = 'http://10.10.108.10:8001';
@@ -312,8 +315,19 @@ class _BigButton extends StatelessWidget {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 1) FURKANCA PANELİ
+// 1) FURKANCA SAYFASI — sürekli dinle / algıla / çevir
 // ════════════════════════════════════════════════════════════════════════════
+
+enum _ListenState { idle, listening, capturing, uploading, speaking }
+
+class _TranslationEntry {
+  final String text;
+  final bool isError;
+  final DateTime time;
+
+  _TranslationEntry(this.text, {this.isError = false, required this.time});
+}
+
 class _FurkancaPage extends StatefulWidget {
   const _FurkancaPage();
 
@@ -323,18 +337,18 @@ class _FurkancaPage extends StatefulWidget {
 
 class _FurkancaPageState extends State<_FurkancaPage> {
   final AudioPlayer _player = AudioPlayer();
-  int _seconds = 4;
-  bool _busy = false;
-  bool _recording = false;
-  int _remaining = 0;
 
-  String? _recognized;
-  String? _corrected;
-  String? _intent;
-  List<String> _missing = const [];
+  AudioRecorder? _recorder;
+  StreamSubscription<Uint8List>? _pcmSub;
+  VadSegmenter? _segmenter;
+
+  _ListenState _state = _ListenState.idle;
+  final List<_TranslationEntry> _history = [];
 
   @override
   void dispose() {
+    _pcmSub?.cancel();
+    _recorder?.dispose();
     _player.dispose();
     super.dispose();
   }
@@ -344,37 +358,90 @@ class _FurkancaPageState extends State<_FurkancaPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _run() async {
-    if (_busy) return;
-    setState(() {
-      _busy = true;
-      _recording = true;
-      _remaining = _seconds;
-      _recognized = null;
-      _corrected = null;
-      _intent = null;
-      _missing = const [];
-    });
+  Future<void> _toggleListening() async {
+    if (_state == _ListenState.idle) {
+      await _startListening();
+    } else {
+      await _stopListening();
+    }
+  }
 
+  Future<void> _startListening() async {
     try {
       await _ensureMic();
+    } catch (e) {
+      _snack('Hata: $e');
+      return;
+    }
 
-      // Mikrofon geri sayımla eş zamanlı açılır: kayıt hemen başlar,
-      // geri sayım gerçek kayıt penceresini gösterir.
-      final session = await _startRecording();
-      for (var i = _seconds; i > 0; i--) {
-        if (!mounted) return;
-        setState(() => _remaining = i);
-        await Future.delayed(const Duration(seconds: 1));
-      }
-      final file = await _stopRecording(session);
-      if (!mounted) return;
-      setState(() {
-        _recording = false;
-        _remaining = 0;
-      });
+    final recorder = AudioRecorder();
+    final stream = await recorder.startStream(
+      const RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        numChannels: 1,
+        sampleRate: 16000,
+      ),
+    );
 
-      // POST /translate
+    _recorder = recorder;
+    _segmenter = VadSegmenter();
+    _pcmSub = stream.listen(_onPcmChunk);
+
+    if (!mounted) return;
+    setState(() => _state = _ListenState.listening);
+  }
+
+  Future<void> _stopListening() async {
+    await _pcmSub?.cancel();
+    _pcmSub = null;
+    await _recorder?.stop();
+    await _recorder?.dispose();
+    _recorder = null;
+    _segmenter = null;
+
+    if (!mounted) return;
+    setState(() => _state = _ListenState.idle);
+  }
+
+  void _onPcmChunk(Uint8List chunk) {
+    final segmenter = _segmenter;
+    if (segmenter == null) return;
+
+    final event = segmenter.addChunk(chunk);
+    if (event == null) return;
+
+    switch (event.type) {
+      case VadEventType.started:
+        // Sadece normal dinleme akışındayken durumu güncelle; bir segment
+        // yüklenirken/seslendirilirken gelen sapma parçaları yok say.
+        if (mounted && _state == _ListenState.listening) {
+          setState(() => _state = _ListenState.capturing);
+        }
+        break;
+      case VadEventType.discardedTooShort:
+        if (mounted && _state == _ListenState.capturing) {
+          setState(() => _state = _ListenState.listening);
+        }
+        break;
+      case VadEventType.ended:
+        unawaited(_handleSegment(event.pcmData!));
+        break;
+    }
+  }
+
+  Future<void> _handleSegment(Uint8List pcmData) async {
+    if (!mounted) return;
+    setState(() => _state = _ListenState.uploading);
+    await _recorder?.pause();
+
+    try {
+      final wavBytes = pcmToWav(pcmData);
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/live_${DateTime.now().millisecondsSinceEpoch}.wav';
+      final file = File(path);
+      await file.writeAsBytes(wavBytes);
+
       final uri = Uri.parse('${_base()}/translate');
       final req = http.MultipartRequest('POST', uri)
         ..fields['user_id'] = kUserId
@@ -388,134 +455,159 @@ class _FurkancaPageState extends State<_FurkancaPage> {
       }
 
       final d = jsonDecode(body) as Map<String, dynamic>;
-      final recognized = d['recognized_text']?.toString() ?? '';
       final corrected = d['response_text']?.toString() ?? '';
-      final intent = d['intent']?.toString() ?? '';
-      final missing = (d['missing_words'] is List)
-          ? (d['missing_words'] as List).map((e) => e.toString()).toList()
-          : <String>[];
 
+      if (!mounted) return;
       setState(() {
-        _recognized = recognized.isEmpty ? null : recognized;
-        _corrected = corrected.isEmpty ? null : corrected;
-        _intent = intent.isEmpty ? null : intent;
-        _missing = missing;
+        _history.insert(
+          0,
+          _TranslationEntry(
+            corrected.isEmpty ? '(boş yanıt)' : corrected,
+            time: DateTime.now(),
+          ),
+        );
       });
 
       final audioUrl = d['audio_url'];
       if (audioUrl is String && audioUrl.isNotEmpty) {
+        if (!mounted) return;
+        setState(() => _state = _ListenState.speaking);
         final full =
             audioUrl.startsWith('http') ? audioUrl : '${_base()}$audioUrl';
+        final completeFuture = _player.onPlayerComplete.first;
         await _player.play(UrlSource(full));
+        await completeFuture;
       }
     } catch (e) {
-      _snack('Hata: $e');
+      if (!mounted) return;
+      setState(() {
+        _history.insert(
+          0,
+          _TranslationEntry('Hata: $e', isError: true, time: DateTime.now()),
+        );
+      });
     } finally {
-      if (mounted)
-        setState(() {
-          _busy = false;
-          _recording = false;
-          _remaining = 0;
-        });
+      if (mounted && _state != _ListenState.idle) {
+        await _recorder?.resume();
+        setState(() => _state = _ListenState.listening);
+      }
+    }
+  }
+
+  String _statusText() {
+    switch (_state) {
+      case _ListenState.idle:
+        return 'Dinlemek için başlat\'a bas.';
+      case _ListenState.listening:
+        return 'Dinleniyor... konuşabilirsin.';
+      case _ListenState.capturing:
+        return 'Kaydediliyor...';
+      case _ListenState.uploading:
+        return 'İşleniyor...';
+      case _ListenState.speaking:
+        return 'Yanıt seslendiriliyor...';
     }
   }
 
   @override
   Widget build(BuildContext context) {
     const accent = Color(0xFF6C63FF);
+    final cs = Theme.of(context).colorScheme;
+    final isListening = _state != _ListenState.idle;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Furkanca')),
-      body: SingleChildScrollView(
+      body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Konuş, AI konuşmanı düzeltilmiş hâle çevirsin ve yüksek sesle okusun.',
+              'Dinlemeyi başlat, konuş — AI konuşmanı düzeltilmiş hâle çevirsin ve yüksek sesle okusun.',
               style: TextStyle(
-                  fontSize: 13,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withOpacity(0.65)),
+                  fontSize: 13, color: cs.onSurface.withOpacity(0.65)),
             ),
-            const SizedBox(height: 20),
-
-            // Süre slider
+            const SizedBox(height: 16),
             Row(
               children: [
-                const Icon(Icons.timer_outlined, size: 18),
+                Icon(
+                  isListening
+                      ? Icons.graphic_eq_rounded
+                      : Icons.mic_off_rounded,
+                  color: accent,
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
-                Text('Kayıt süresi: $_seconds sn'),
+                Expanded(
+                  child:
+                      Text(_statusText(), style: const TextStyle(fontSize: 13)),
+                ),
               ],
             ),
-            Slider(
-              value: _seconds.toDouble(),
-              min: 2,
-              max: 12,
-              divisions: 10,
-              label: '$_seconds sn',
-              activeColor: accent,
-              onChanged:
-                  _busy ? null : (v) => setState(() => _seconds = v.round()),
-            ),
-            const SizedBox(height: 8),
-
-            // Progress bar
-            if (_recording) ...[
-              LinearProgressIndicator(
-                value:
-                    _seconds == 0 ? null : (_seconds - _remaining) / _seconds,
-                color: accent,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Kayıt alınıyor... $_remaining sn kaldı',
-                style: const TextStyle(fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            // Ana buton
+            const SizedBox(height: 16),
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: accent,
+                backgroundColor: isListening ? Colors.redAccent : accent,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
-              onPressed: _busy ? null : _run,
-              icon: Icon(_busy ? Icons.hourglass_top : Icons.mic_rounded),
+              onPressed: _toggleListening,
+              icon: Icon(isListening ? Icons.stop_rounded : Icons.mic_rounded),
               label: Text(
-                _busy
-                    ? (_recording ? 'Kaydediliyor...' : 'İşleniyor...')
-                    : 'Konuşmaya Başla',
+                isListening ? 'Dinlemeyi Durdur' : 'Dinlemeyi Başlat',
                 style:
                     const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // Sonuçlar
-            if (_recognized != null)
-              _ResultTile(
-                  label: 'Duyulan', value: _recognized!, color: Colors.blue),
-            if (_intent != null)
-              _ResultTile(
-                  label: 'Niyet', value: _intent!, color: Colors.purple),
-            if (_corrected != null)
-              _ResultTile(
-                  label: 'Düzeltilmiş',
-                  value: _corrected!,
-                  color: const Color(0xFF10B981)),
-            if (_missing.isNotEmpty)
-              _ResultTile(
-                label: 'Eksik Kelimeler',
-                value: _missing.join(', '),
-                color: Colors.orange,
-              ),
+            const SizedBox(height: 20),
+            Expanded(
+              child: _history.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Henüz çeviri yok.',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: cs.onSurface.withOpacity(0.4)),
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: _history.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) {
+                        final entry = _history[i];
+                        final color = entry.isError ? Colors.red : accent;
+                        return Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: color.withOpacity(0.3)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${entry.time.hour.toString().padLeft(2, '0')}:'
+                                '${entry.time.minute.toString().padLeft(2, '0')}:'
+                                '${entry.time.second.toString().padLeft(2, '0')}',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: color),
+                              ),
+                              const SizedBox(height: 6),
+                              SelectableText(
+                                entry.text,
+                                style: TextStyle(
+                                    fontSize: 14, color: cs.onSurface),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
           ],
         ),
       ),
