@@ -567,8 +567,7 @@ class _FurkancaPageState extends State<_FurkancaPage> {
                       child: Text(
                         'Henüz çeviri yok.',
                         style: TextStyle(
-                            fontSize: 13,
-                            color: cs.onSurface.withOpacity(0.4)),
+                            fontSize: 13, color: cs.onSurface.withOpacity(0.4)),
                       ),
                     )
                   : ListView.separated(
