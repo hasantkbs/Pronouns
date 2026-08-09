@@ -41,8 +41,7 @@ void main() {
         isTrue);
   });
 
-  test('a new store instance restores takes saved by a previous one',
-      () async {
+  test('a new store instance restores takes saved by a previous one', () async {
     final store1 = PendingRecordingsStore(tempDir);
     await store1.load();
     await store1.add('elma', writeFakeAudio('rec1.wav'));

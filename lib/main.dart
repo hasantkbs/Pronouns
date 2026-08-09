@@ -763,8 +763,7 @@ class _KayitPageState extends State<_KayitPage> {
       await _store!.add(word, file);
       if (!mounted) return;
       final count = _wordPending(word).length;
-      setState(
-          () => _lastStatus = 'Cihazda kaydedildi: $word (Tekrar $count)');
+      setState(() => _lastStatus = 'Cihazda kaydedildi: $word (Tekrar $count)');
       _snack('Cihazda kaydedildi: $word');
     } catch (e) {
       _snack('Hata: $e');
@@ -1018,8 +1017,8 @@ class _KayitPageState extends State<_KayitPage> {
                 _busy
                     ? (_recording ? 'Kaydediliyor...' : 'İşleniyor...')
                     : 'Kaydet (Cihazda Sakla)',
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(height: 10),
@@ -1087,12 +1086,12 @@ class _PendingUploadsPageState extends State<_PendingUploadsPage> {
       if (!mounted) return;
       setState(() => _status[take.filePath] = _UploadStatus.uploading);
       try {
-        final req =
-            http.MultipartRequest('POST', Uri.parse('${_base()}/record'))
-              ..fields['user_id'] = kUserId
-              ..fields['word'] = take.word
-              ..files.add(
-                  await http.MultipartFile.fromPath('audio', take.filePath));
+        final req = http.MultipartRequest(
+            'POST', Uri.parse('${_base()}/record'))
+          ..fields['user_id'] = kUserId
+          ..fields['word'] = take.word
+          ..files
+              .add(await http.MultipartFile.fromPath('audio', take.filePath));
 
         final res = await req.send();
         final body = await res.stream.bytesToString();
@@ -1153,8 +1152,8 @@ class _PendingUploadsPageState extends State<_PendingUploadsPage> {
                   : Icons.cloud_upload_rounded),
               label: Text(
                 _uploadingAll ? 'Yükleniyor...' : 'Tümünü Yükle',
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(height: 20),
@@ -1164,8 +1163,7 @@ class _PendingUploadsPageState extends State<_PendingUploadsPage> {
                       child: Text(
                         'Bekleyen kayıt yok.',
                         style: TextStyle(
-                            fontSize: 13,
-                            color: cs.onSurface.withOpacity(0.4)),
+                            fontSize: 13, color: cs.onSurface.withOpacity(0.4)),
                       ),
                     )
                   : ListView(
@@ -1178,8 +1176,7 @@ class _PendingUploadsPageState extends State<_PendingUploadsPage> {
                               Text(
                                 entry.key,
                                 style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800),
+                                    fontSize: 18, fontWeight: FontWeight.w800),
                               ),
                               const SizedBox(height: 6),
                               ...entry.value.asMap().entries.map((e) {
@@ -1201,8 +1198,7 @@ class _PendingUploadsPageState extends State<_PendingUploadsPage> {
                                       else if (status == _UploadStatus.error)
                                         Tooltip(
                                           message:
-                                              _errors[take.filePath] ??
-                                                  'Hata',
+                                              _errors[take.filePath] ?? 'Hata',
                                           child: const Icon(
                                               Icons.error_outline_rounded,
                                               color: Colors.red,
@@ -1214,8 +1210,7 @@ class _PendingUploadsPageState extends State<_PendingUploadsPage> {
                                               Icons.play_arrow_rounded,
                                               size: 20),
                                           onPressed: () => _player.play(
-                                              DeviceFileSource(
-                                                  take.filePath)),
+                                              DeviceFileSource(take.filePath)),
                                         ),
                                         IconButton(
                                           icon: const Icon(

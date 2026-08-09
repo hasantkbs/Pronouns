@@ -79,8 +79,8 @@ class PendingRecordingsStore {
       suffix++;
     }
     await audioFile.copy(destPath);
-    final take = PendingTake(
-        word: word, filePath: destPath, recordedAt: resolvedNow);
+    final take =
+        PendingTake(word: word, filePath: destPath, recordedAt: resolvedNow);
     _takes.add(take);
     await _save();
     return take;
