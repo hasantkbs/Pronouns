@@ -1084,6 +1084,7 @@ class _PendingUploadsPageState extends State<_PendingUploadsPage> {
 
     final takes = List<PendingTake>.from(widget.store.takes);
     for (final take in takes) {
+      if (!mounted) return;
       setState(() => _status[take.filePath] = _UploadStatus.uploading);
       try {
         final req =
