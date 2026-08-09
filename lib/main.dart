@@ -98,11 +98,8 @@ class _MainPageState extends State<MainPage>
   }
 
   void _openFurkanca() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _FurkancaPanel(),
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const _FurkancaPage()),
     );
   }
 
@@ -380,14 +377,14 @@ class _Sheet extends StatelessWidget {
 // ════════════════════════════════════════════════════════════════════════════
 // 1) FURKANCA PANELİ
 // ════════════════════════════════════════════════════════════════════════════
-class _FurkancaPanel extends StatefulWidget {
-  const _FurkancaPanel();
+class _FurkancaPage extends StatefulWidget {
+  const _FurkancaPage();
 
   @override
-  State<_FurkancaPanel> createState() => _FurkancaPanelState();
+  State<_FurkancaPage> createState() => _FurkancaPageState();
 }
 
-class _FurkancaPanelState extends State<_FurkancaPanel> {
+class _FurkancaPageState extends State<_FurkancaPage> {
   final AudioPlayer _player = AudioPlayer();
   int _seconds = 4;
   bool _busy = false;
@@ -489,13 +486,13 @@ class _FurkancaPanelState extends State<_FurkancaPanel> {
   Widget build(BuildContext context) {
     const accent = Color(0xFF6C63FF);
 
-    return _Sheet(
-      title: 'Furkanca',
-      icon: Icons.record_voice_over_rounded,
-      iconColor: accent,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return Scaffold(
+      appBar: AppBar(title: const Text('Furkanca')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           Text(
             'Konuş, AI konuşmanı düzeltilmiş hâle çevirsin ve yüksek sesle okusun.',
             style: TextStyle(
@@ -577,6 +574,7 @@ class _FurkancaPanelState extends State<_FurkancaPanel> {
               color: Colors.orange,
             ),
         ],
+      ),
       ),
     );
   }
