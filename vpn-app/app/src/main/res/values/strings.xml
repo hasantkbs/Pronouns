@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PronounsVPN</string>
+    <string name="app_description">Enterprise VPN Client</string>
+</resources>

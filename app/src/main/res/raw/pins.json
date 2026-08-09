@@ -1,0 +1,9 @@
+{
+  "pins": [
+    {
+      "host": "api.pronouns.vpn",
+      "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "expiration": "2027-12-31"
+    }
+  ]
+}

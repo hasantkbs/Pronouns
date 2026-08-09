@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pronouns</string>
+    <string name="channel_vpn">VPN Service</string>
+    <string name="channel_updates">App Updates</string>
+    <string name="notification_vpn">VPN is active</string>
+    <string name="notification_update">Update available</string>
+    <string name="connecting">Connecting…</string>
+    <string name="connected">Connected</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="error_connecting">Connection failed</string>
+    <string name="update_available">New version available</string>
+    <string name="installing_update">Installing update…</string>
+</resources>
