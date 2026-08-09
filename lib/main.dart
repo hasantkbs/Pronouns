@@ -110,11 +110,8 @@ class _MainPageState extends State<MainPage>
   }
 
   void _openAyarlar() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _AyarlarPanel(),
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const _AyarlarPage()),
     );
   }
 
@@ -901,14 +898,14 @@ class _KayitPageState extends State<_KayitPage> {
 // ════════════════════════════════════════════════════════════════════════════
 // 3) AYARLAR PANELİ
 // ════════════════════════════════════════════════════════════════════════════
-class _AyarlarPanel extends StatefulWidget {
-  const _AyarlarPanel();
+class _AyarlarPage extends StatefulWidget {
+  const _AyarlarPage();
 
   @override
-  State<_AyarlarPanel> createState() => _AyarlarPanelState();
+  State<_AyarlarPage> createState() => _AyarlarPageState();
 }
 
-class _AyarlarPanelState extends State<_AyarlarPanel> {
+class _AyarlarPageState extends State<_AyarlarPage> {
   bool _loading = true;
   bool _saving = false;
   bool _training = false;
@@ -1054,18 +1051,18 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
     const accent = Color(0xFFF59E0B);
     final cs = Theme.of(context).colorScheme;
 
-    return _Sheet(
-      title: 'Model Ayarları',
-      icon: Icons.tune_rounded,
-      iconColor: accent,
-      body: _loading
-          ? const Center(
-              child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator()))
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+    return Scaffold(
+      appBar: AppBar(title: const Text('Model Ayarları')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: _loading
+            ? const Center(
+                child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: CircularProgressIndicator()))
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                 // Model bilgi kartı
                 if (_modelInfo.isNotEmpty)
                   Container(
@@ -1243,6 +1240,7 @@ class _AyarlarPanelState extends State<_AyarlarPanel> {
                 ),
               ],
             ),
+      ),
     );
   }
 }
