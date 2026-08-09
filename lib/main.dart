@@ -17,6 +17,8 @@ import 'pending_recordings.dart';
 // ─── Sabitler ────────────────────────────────────────────────────────────────
 const String kBaseUrl = 'http://10.10.108.10:8001';
 const String kUserId = 'FurkanV1';
+const String _kAdminUsername = 'admin';
+const String _kAdminPassword = 'adminpassword';
 
 // ─── Uygulama ────────────────────────────────────────────────────────────────
 void main() => runApp(const PronounsApp());
@@ -96,6 +98,7 @@ class MainPage extends StatefulWidget {
 class _MainPageState extends State<MainPage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulse;
+  bool _ayarlarUnlocked = false;
 
   @override
   void initState() {
@@ -125,8 +128,18 @@ class _MainPageState extends State<MainPage>
   }
 
   void _openAyarlar() {
+    if (_ayarlarUnlocked) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const _AyarlarPage()),
+      );
+      return;
+    }
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const _AyarlarPage()),
+      MaterialPageRoute(
+        builder: (_) => _AyarlarLoginPage(
+          onSuccess: () => setState(() => _ayarlarUnlocked = true),
+        ),
+      ),
     );
   }
 
@@ -1228,6 +1241,98 @@ class _PendingUploadsPageState extends State<_PendingUploadsPage> {
                         );
                       }).toList(),
                     ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 2c) AYARLAR GİRİŞİ
+// ════════════════════════════════════════════════════════════════════════════
+class _AyarlarLoginPage extends StatefulWidget {
+  final VoidCallback onSuccess;
+  const _AyarlarLoginPage({required this.onSuccess});
+
+  @override
+  State<_AyarlarLoginPage> createState() => _AyarlarLoginPageState();
+}
+
+class _AyarlarLoginPageState extends State<_AyarlarLoginPage> {
+  final _userController = TextEditingController();
+  final _passController = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _userController.dispose();
+    _passController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_userController.text == _kAdminUsername &&
+        _passController.text == _kAdminPassword) {
+      widget.onSuccess();
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const _AyarlarPage()),
+      );
+      return;
+    }
+    setState(() => _error = 'Kullanıcı adı veya şifre hatalı');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFFF59E0B);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Ayarlar Girişi')),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.lock_outline_rounded, size: 48, color: accent),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _userController,
+              decoration: const InputDecoration(
+                labelText: 'Kullanıcı Adı',
+                prefixIcon: Icon(Icons.person_outline_rounded),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _passController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Şifre',
+                prefixIcon: Icon(Icons.key_outlined),
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(_error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 13)),
+            ],
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: accent,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: _submit,
+              icon: const Icon(Icons.login_rounded),
+              label: const Text('Giriş Yap',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             ),
           ],
         ),
