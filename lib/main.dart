@@ -104,11 +104,8 @@ class _MainPageState extends State<MainPage>
   }
 
   void _openKayit() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _KayitPanel(),
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const _KayitPage()),
     );
   }
 
@@ -583,14 +580,14 @@ class _FurkancaPageState extends State<_FurkancaPage> {
 // ════════════════════════════════════════════════════════════════════════════
 // 2) KAYIT PANELİ
 // ════════════════════════════════════════════════════════════════════════════
-class _KayitPanel extends StatefulWidget {
-  const _KayitPanel();
+class _KayitPage extends StatefulWidget {
+  const _KayitPage();
 
   @override
-  State<_KayitPanel> createState() => _KayitPanelState();
+  State<_KayitPage> createState() => _KayitPageState();
 }
 
-class _KayitPanelState extends State<_KayitPanel> {
+class _KayitPageState extends State<_KayitPage> {
   String _setFile = 'wordSet.txt';
   List<String> _sets = const [];
 
@@ -739,13 +736,13 @@ class _KayitPanelState extends State<_KayitPanel> {
     final allDone = _word == null;
     final progress = _totalWords > 0 ? _completedWords / _totalWords : 0.0;
 
-    return _Sheet(
-      title: 'Kayıt',
-      icon: Icons.mic_rounded,
-      iconColor: accent,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return Scaffold(
+      appBar: AppBar(title: const Text('Kayıt')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           // İlerleme
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -895,6 +892,7 @@ class _KayitPanelState extends State<_KayitPanel> {
             _ResultTile(label: 'Durum', value: _lastStatus!, color: accent),
           ],
         ],
+      ),
       ),
     );
   }
