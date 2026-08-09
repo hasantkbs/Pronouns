@@ -69,8 +69,14 @@ class PendingRecordingsStore {
   /// [audioFile]'ı kalıcı depoya kopyalar ve manifest'e ekler.
   Future<PendingTake> add(String word, File audioFile) async {
     await _recordingsDir.create(recursive: true);
-    final destPath =
+    var destPath =
         '${_recordingsDir.path}/${word}_${DateTime.now().millisecondsSinceEpoch}.wav';
+    var suffix = 1;
+    while (await File(destPath).exists()) {
+      destPath =
+          '${_recordingsDir.path}/${word}_${DateTime.now().millisecondsSinceEpoch}_$suffix.wav';
+      suffix++;
+    }
     await audioFile.copy(destPath);
     final take = PendingTake(
         word: word, filePath: destPath, recordedAt: DateTime.now());

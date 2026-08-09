@@ -82,4 +82,18 @@ void main() {
     expect(store.forWord('armut'), hasLength(1));
     expect(store.forWord('kayısı'), isEmpty);
   });
+
+  test('add() never overwrites an existing take even under filename collisions',
+      () async {
+    final store = PendingRecordingsStore(tempDir);
+    await store.load();
+
+    final take1 = await store.add('elma', writeFakeAudio('rec1.wav'));
+    final take2 = await store.add('elma', writeFakeAudio('rec2.wav'));
+
+    expect(take1.filePath, isNot(equals(take2.filePath)));
+    expect(File(take1.filePath).existsSync(), isTrue);
+    expect(File(take2.filePath).existsSync(), isTrue);
+    expect(store.takes, hasLength(2));
+  });
 }
