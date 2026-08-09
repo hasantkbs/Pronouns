@@ -88,8 +88,11 @@ void main() {
     final store = PendingRecordingsStore(tempDir);
     await store.load();
 
-    final take1 = await store.add('elma', writeFakeAudio('rec1.wav'));
-    final take2 = await store.add('elma', writeFakeAudio('rec2.wav'));
+    final sameInstant = DateTime(2024, 1, 1, 12, 0, 0);
+    final take1 =
+        await store.add('elma', writeFakeAudio('rec1.wav'), now: sameInstant);
+    final take2 =
+        await store.add('elma', writeFakeAudio('rec2.wav'), now: sameInstant);
 
     expect(take1.filePath, isNot(equals(take2.filePath)));
     expect(File(take1.filePath).existsSync(), isTrue);

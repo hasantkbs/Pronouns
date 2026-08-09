@@ -67,19 +67,20 @@ class PendingRecordingsStore {
   Set<String> get pendingWords => _takes.map((t) => t.word).toSet();
 
   /// [audioFile]'ı kalıcı depoya kopyalar ve manifest'e ekler.
-  Future<PendingTake> add(String word, File audioFile) async {
+  Future<PendingTake> add(String word, File audioFile, {DateTime? now}) async {
+    final resolvedNow = now ?? DateTime.now();
     await _recordingsDir.create(recursive: true);
     var destPath =
-        '${_recordingsDir.path}/${word}_${DateTime.now().millisecondsSinceEpoch}.wav';
+        '${_recordingsDir.path}/${word}_${resolvedNow.millisecondsSinceEpoch}.wav';
     var suffix = 1;
     while (await File(destPath).exists()) {
       destPath =
-          '${_recordingsDir.path}/${word}_${DateTime.now().millisecondsSinceEpoch}_$suffix.wav';
+          '${_recordingsDir.path}/${word}_${resolvedNow.millisecondsSinceEpoch}_$suffix.wav';
       suffix++;
     }
     await audioFile.copy(destPath);
     final take = PendingTake(
-        word: word, filePath: destPath, recordedAt: DateTime.now());
+        word: word, filePath: destPath, recordedAt: resolvedNow);
     _takes.add(take);
     await _save();
     return take;
