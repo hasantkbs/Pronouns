@@ -21,6 +21,7 @@ from src.services.model_service import ModelService
 from src.services.settings_service import SettingsService
 from src.services.training_service import TrainingService
 from src.data.repository import UserDataRepository
+from src.services.speaker_verification_service import SpeakerVerificationService
 from src.utils.utils import calculate_audio_quality, normalize_path_for_cross_platform
 
 app = FastAPI(title="Pronouns AI API")
@@ -29,6 +30,8 @@ app = FastAPI(title="Pronouns AI API")
 repo = UserDataRepository()
 # Settings service instance
 settings_service = SettingsService()
+# Konuşmacı doğrulama servisi
+speaker_service = SpeakerVerificationService(repo)
 
 # CORS ayarları - Farklı ağlardan erişim için
 app.add_middleware(
@@ -348,7 +351,13 @@ async def translate_speech(user_id: str = Form(...), audio: UploadFile = File(..
     temp_input = f"temp_in_{temp_id}.wav"
     with open(temp_input, "wb") as buffer:
         shutil.copyfileobj(audio.file, buffer)
-    
+
+    if config.SPEAKER_VERIFY_ENABLED:
+        is_match, _score = speaker_service.verify(user_id, temp_input)
+        if not is_match:
+            os.remove(temp_input)
+            return {"rejected": True, "reason": "speaker_mismatch"}
+
     # ASR
     asr = get_asr(user_id)
     text, confidence = asr.transcribe(temp_input)
@@ -372,6 +381,16 @@ async def translate_speech(user_id: str = Form(...), audio: UploadFile = File(..
         "audio_url": f"/download/{os.path.basename(out_path)}" if out_path else None,
         "missing_words": missing
     }
+
+@app.post("/voice-profile/rebuild")
+async def rebuild_voice_profile(user_id: str):
+    """Kullanıcının mevcut kelime kayıtlarından ses profilini yeniden oluşturur."""
+    return speaker_service.enroll(user_id)
+
+@app.get("/voice-profile/status")
+async def voice_profile_status(user_id: str):
+    """Kullanıcının ses profilinin mevcut durumunu döndürür."""
+    return speaker_service.status(user_id)
 
 @app.get("/download/{filename}")
 async def download_audio(filename: str):
