@@ -474,6 +474,13 @@ class _FurkancaPageState extends State<_FurkancaPage> {
       }
 
       final d = jsonDecode(body) as Map<String, dynamic>;
+
+      if (d['rejected'] == true) {
+        // Konuşmacı doğrulaması eşleşmedi: segment sessizce yok sayılır,
+        // `finally` bloğu dinlemeye devam eder.
+        return;
+      }
+
       final corrected = d['response_text']?.toString() ?? '';
 
       if (!mounted) return;
@@ -1376,6 +1383,9 @@ class _AyarlarPageState extends State<_AyarlarPage> {
   int _batchSize = 8;
   String _trainStatus = '';
 
+  Map<String, dynamic>? _voiceProfileStatus;
+  bool _voiceProfileBusy = false;
+
   final List<String> _modelOptions = ['Furkan', 'base', 'large'];
   final List<String> _algoOptions = ['lora', 'qlora', 'full'];
 
@@ -1383,6 +1393,7 @@ class _AyarlarPageState extends State<_AyarlarPage> {
   void initState() {
     super.initState();
     _fetchSettings();
+    _fetchVoiceProfileStatus();
   }
 
   void _snack(String msg) {
@@ -1435,6 +1446,52 @@ class _AyarlarPageState extends State<_AyarlarPage> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _fetchVoiceProfileStatus() async {
+    try {
+      final res = await http.get(
+        Uri.parse('${_base()}/voice-profile/status?user_id=$kUserId'),
+        headers: _authHeaders(),
+      );
+      if (res.statusCode == 200) {
+        final d = jsonDecode(res.body) as Map<String, dynamic>;
+        if (!mounted) return;
+        setState(() => _voiceProfileStatus = d);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _rebuildVoiceProfile() async {
+    setState(() => _voiceProfileBusy = true);
+    try {
+      final res = await http.post(
+        Uri.parse('${_base()}/voice-profile/rebuild?user_id=$kUserId'),
+        headers: _authHeaders(),
+      );
+      if (res.statusCode == 200) {
+        final d = jsonDecode(res.body) as Map<String, dynamic>;
+        if (!mounted) return;
+        setState(() => _voiceProfileStatus = {'exists': true, ...d});
+        _snack('Ses profili güncellendi (${d['sample_count']} kayıt).');
+      } else {
+        _snack('Ses profili güncellenemedi: ${res.statusCode}');
+      }
+    } catch (e) {
+      _snack('Hata: $e');
+    } finally {
+      if (mounted) setState(() => _voiceProfileBusy = false);
+    }
+  }
+
+  String _voiceProfileText() {
+    final status = _voiceProfileStatus;
+    if (status == null) return 'Durum yükleniyor...';
+    final exists = status['exists'] == true;
+    if (!exists) return 'Henüz ses profili oluşturulmadı.';
+    final count = status['sample_count'] ?? '-';
+    final createdAt = status['created_at']?.toString() ?? '-';
+    return '$count kayıttan oluşturuldu • $createdAt';
   }
 
   Future<void> _saveSettings() async {
@@ -1690,6 +1747,36 @@ class _AyarlarPageState extends State<_AyarlarPage> {
                         : Icons.model_training_rounded),
                     label: Text(
                       _training ? 'Eğitim başlatıldı...' : 'Fine-Tune Başlat',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ── Ses Profili ──
+                  const _SectionHeader(label: 'Ses Profili'),
+                  const SizedBox(height: 10),
+                  _ResultTile(
+                    label: 'Durum',
+                    value: _voiceProfileText(),
+                    color: accent,
+                  ),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: accent,
+                      side: const BorderSide(color: accent),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: _voiceProfileBusy ? null : _rebuildVoiceProfile,
+                    icon: Icon(_voiceProfileBusy
+                        ? Icons.hourglass_top
+                        : Icons.record_voice_over_rounded),
+                    label: Text(
+                      _voiceProfileBusy
+                          ? 'Güncelleniyor...'
+                          : 'Ses Profilini Yenile',
                       style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.w700),
                     ),
