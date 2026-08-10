@@ -156,8 +156,12 @@ API_SECRET_KEY = "c2a6dd1afc678eb93f0c46c8c1528e2b1c07676fbde0951f"
 # olduğunu kontrol eder. False yapılırsa özellik tamamen devre dışı kalır.
 SPEAKER_VERIFY_ENABLED = True
 SPEAKER_VERIFY_MODEL = "speechbrain/spkrec-ecapa-voxceleb"
-# Kosinüs benzerliği eşiği (0-1). Başlangıç değeri; gerçek kayıtlarla
-# kalibre edilmelidir (bkz. Task 4).
-SPEAKER_VERIFY_THRESHOLD = 0.72
+# Kosinüs benzerliği eşiği (0-1). FurkanV1 (40 örnekli profil) ile Admin
+# klasöründeki farklı konuşmacının kayıtları karşılaştırılarak kalibre
+# edildi (2026-08-10): Admin skorları 0.242-0.480, Furkan'ın kendi sesi
+# 0.557-0.800 arasında çıktı — aralarında boşluk var, eşik bu boşluğun
+# ortasına yakın seçildi (yanlış reddi en aza indirmek için Furkan tarafına
+# yakın).
+SPEAKER_VERIFY_THRESHOLD = 0.50
 # Referans profil oluşturulurken kullanılacak azami kayıt sayısı.
 SPEAKER_ENROLL_MAX_SAMPLES = 40
