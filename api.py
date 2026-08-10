@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import uuid
@@ -38,6 +38,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# API anahtarı ile korunmayan yollar: APK henüz kurulmamışken indirilebilmeli,
+# sentezlenmiş sesler audioplayers ile custom header olmadan oynatılıyor.
+_API_KEY_EXEMPT_PATHS = {"/apk"}
+_API_KEY_EXEMPT_PREFIXES = ("/download/",)
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    path = request.url.path
+    if path in _API_KEY_EXEMPT_PATHS or path.startswith(_API_KEY_EXEMPT_PREFIXES):
+        return await call_next(request)
+    if request.headers.get("x-api-key") != config.API_SECRET_KEY:
+        return JSONResponse(status_code=401, content={"error": "invalid_api_key"})
+    return await call_next(request)
+
 
 # Global sistemler (Lazy loading için None)
 asr_systems = {}  # user_id -> ASRSystem
@@ -359,6 +375,8 @@ async def translate_speech(user_id: str = Form(...), audio: UploadFile = File(..
 
 @app.get("/download/{filename}")
 async def download_audio(filename: str):
+    if not os.path.exists(filename):
+        return JSONResponse(status_code=404, content={"error": "file_not_found"})
     return FileResponse(filename, media_type="audio/wav")
 
 # ─── APK Download ─────────────────────────────────────────────────────────────

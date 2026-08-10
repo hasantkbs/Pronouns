@@ -145,3 +145,8 @@ SYNTHESIS_MIN_QUALITY = 50       # Sentez için kullanılacak minimum kalite sko
 SYNTHESIS_CROSSFADE_MS = 30      # Kelimeler arası crossfade süresi (ms)
 SYNTHESIS_PAUSE_MS = 150         # Kelimeler arası duraklatma süresi (ms)
 SYNTHESIS_BEST_K = 3             # Her kelime için en iyi K kayıt seçimi
+
+# --- API Güvenliği ---
+# Mobil uygulama tüm isteklerde bu değeri `X-API-Key` header'ında gönderir.
+# lib/main.dart içindeki _kApiKey ile birebir aynı olmalı.
+API_SECRET_KEY = "c2a6dd1afc678eb93f0c46c8c1528e2b1c07676fbde0951f"
