@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import hmac
 import logging
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, Request
@@ -33,6 +34,11 @@ settings_service = SettingsService()
 # Konuşmacı doğrulama servisi
 speaker_service = SpeakerVerificationService(repo)
 
+# /translate tarafından sentezlenen ses dosyalarının yazıldığı dizin.
+# /download/{filename} yalnızca bu dizin içindeki dosyaları sunar.
+_TTS_OUTPUT_DIR = Path("data/tts_out").resolve()
+_TTS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
 # CORS ayarları - Farklı ağlardan erişim için
 app.add_middleware(
     CORSMiddleware,
@@ -53,7 +59,7 @@ async def require_api_key(request: Request, call_next):
     path = request.url.path
     if path in _API_KEY_EXEMPT_PATHS or path.startswith(_API_KEY_EXEMPT_PREFIXES):
         return await call_next(request)
-    if request.headers.get("x-api-key") != config.API_SECRET_KEY:
+    if not hmac.compare_digest(request.headers.get("x-api-key", ""), config.API_SECRET_KEY):
         return JSONResponse(status_code=401, content={"error": "invalid_api_key"})
     return await call_next(request)
 
@@ -353,7 +359,10 @@ async def translate_speech(user_id: str = Form(...), audio: UploadFile = File(..
         shutil.copyfileobj(audio.file, buffer)
 
     if config.SPEAKER_VERIFY_ENABLED:
-        is_match, _score = speaker_service.verify(user_id, temp_input)
+        is_match, score = speaker_service.verify(user_id, temp_input)
+        logging.getLogger("speaker_verification").info(
+            f"user={user_id} match={is_match} score={score}"
+        )
         if not is_match:
             os.remove(temp_input)
             return {"rejected": True, "reason": "speaker_mismatch"}
@@ -372,7 +381,9 @@ async def translate_speech(user_id: str = Form(...), audio: UploadFile = File(..
     
     # Synthesis
     synth = WordSynthesizer(user_id=user_id)
-    out_path, missing = synth.synthesize_sentence(action_response)
+    out_filename = f"{uuid.uuid4()}.wav"
+    out_path = str(_TTS_OUTPUT_DIR / out_filename)
+    out_path, missing = synth.synthesize_sentence(action_response, output_path=out_path)
     
     return {
         "recognized_text": text,
@@ -383,7 +394,7 @@ async def translate_speech(user_id: str = Form(...), audio: UploadFile = File(..
     }
 
 @app.post("/voice-profile/rebuild")
-async def rebuild_voice_profile(user_id: str):
+def rebuild_voice_profile(user_id: str):
     """Kullanıcının mevcut kelime kayıtlarından ses profilini yeniden oluşturur."""
     return speaker_service.enroll(user_id)
 
@@ -394,9 +405,10 @@ async def voice_profile_status(user_id: str):
 
 @app.get("/download/{filename}")
 async def download_audio(filename: str):
-    if not os.path.exists(filename):
+    safe_path = (_TTS_OUTPUT_DIR / Path(filename).name).resolve()
+    if not safe_path.is_relative_to(_TTS_OUTPUT_DIR) or not safe_path.exists():
         return JSONResponse(status_code=404, content={"error": "file_not_found"})
-    return FileResponse(filename, media_type="audio/wav")
+    return FileResponse(str(safe_path), media_type="audio/wav")
 
 # ─── APK Download ─────────────────────────────────────────────────────────────
 
