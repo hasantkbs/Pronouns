@@ -104,6 +104,7 @@ sortedcontainers
 sounddevice
 soundfile
 soxr
+speechbrain
 starlette
 sympy
 threadpoolctl

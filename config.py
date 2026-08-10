@@ -150,3 +150,14 @@ SYNTHESIS_BEST_K = 3             # Her kelime için en iyi K kayıt seçimi
 # Mobil uygulama tüm isteklerde bu değeri `X-API-Key` header'ında gönderir.
 # lib/main.dart içindeki _kApiKey ile birebir aynı olmalı.
 API_SECRET_KEY = "c2a6dd1afc678eb93f0c46c8c1528e2b1c07676fbde0951f"
+
+# --- Konuşmacı Doğrulama (Speaker Verification) Ayarları ---
+# /translate'e gelen ses segmentinin gerçekten kayıtlı kullanıcıya mı ait
+# olduğunu kontrol eder. False yapılırsa özellik tamamen devre dışı kalır.
+SPEAKER_VERIFY_ENABLED = True
+SPEAKER_VERIFY_MODEL = "speechbrain/spkrec-ecapa-voxceleb"
+# Kosinüs benzerliği eşiği (0-1). Başlangıç değeri; gerçek kayıtlarla
+# kalibre edilmelidir (bkz. Task 4).
+SPEAKER_VERIFY_THRESHOLD = 0.72
+# Referans profil oluşturulurken kullanılacak azami kayıt sayısı.
+SPEAKER_ENROLL_MAX_SAMPLES = 40
