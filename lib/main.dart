@@ -15,10 +15,11 @@ import 'vad.dart';
 import 'pending_recordings.dart';
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
-const String kBaseUrl = 'http://10.10.108.10:8001';
+const String kBaseUrl = 'http://88.255.236.143:8001';
 const String kUserId = 'FurkanV1';
 const String _kAdminUsername = 'admin';
 const String _kAdminPassword = 'adminpassword';
+const String _kApiKey = 'c2a6dd1afc678eb93f0c46c8c1528e2b1c07676fbde0951f';
 
 // ─── Uygulama ────────────────────────────────────────────────────────────────
 void main() => runApp(const PronounsApp());
@@ -46,6 +47,9 @@ class PronounsApp extends StatelessWidget {
 
 // ─── Yardımcı fonksiyonlar ───────────────────────────────────────────────────
 String _base() => kBaseUrl.trimRight().replaceAll(RegExp(r'/*$'), '');
+
+Map<String, String> _authHeaders([Map<String, String>? extra]) =>
+    {'X-API-Key': _kApiKey, ...?extra};
 
 Future<void> _ensureMic() async {
   final s = await Permission.microphone.request();
@@ -458,6 +462,7 @@ class _FurkancaPageState extends State<_FurkancaPage> {
 
       final uri = Uri.parse('${_base()}/translate');
       final req = http.MultipartRequest('POST', uri)
+        ..headers.addAll(_authHeaders())
         ..fields['user_id'] = kUserId
         ..files.add(await http.MultipartFile.fromPath('audio', file.path));
 
@@ -692,7 +697,8 @@ class _KayitPageState extends State<_KayitPage> {
 
   Future<void> _loadSets() async {
     try {
-      final res = await http.get(Uri.parse('${_base()}/collect/word-sets'));
+      final res =
+          await http.get(Uri.parse('${_base()}/collect/word-sets'), headers: _authHeaders());
       final d = jsonDecode(res.body) as Map<String, dynamic>;
       final s = (d['sets'] as List?)?.map((e) => e.toString()).toList() ?? [];
       if (!mounted) return;
@@ -708,7 +714,7 @@ class _KayitPageState extends State<_KayitPage> {
       final exclude = _store?.pendingWords.join(',') ?? '';
       final uri = Uri.parse('${_base()}/collect/next-word?user_id=$kUserId'
           '&set_file=$_setFile&exclude=${Uri.encodeQueryComponent(exclude)}');
-      final res = await http.get(uri);
+      final res = await http.get(uri, headers: _authHeaders());
       final d = jsonDecode(res.body) as Map<String, dynamic>;
       if (d['error'] != null) throw Exception(d['error']);
       if (!mounted) return;
@@ -729,7 +735,7 @@ class _KayitPageState extends State<_KayitPage> {
     try {
       final uri = Uri.parse(
           '${_base()}/collect/progress?user_id=$kUserId&set_file=$_setFile');
-      final res = await http.get(uri);
+      final res = await http.get(uri, headers: _authHeaders());
       final d = jsonDecode(res.body) as Map<String, dynamic>;
       if (!mounted) return;
       setState(() {
@@ -1101,6 +1107,7 @@ class _PendingUploadsPageState extends State<_PendingUploadsPage> {
       try {
         final req = http.MultipartRequest(
             'POST', Uri.parse('${_base()}/record'))
+          ..headers.addAll(_authHeaders())
           ..fields['user_id'] = kUserId
           ..fields['word'] = take.word
           ..files
@@ -1392,6 +1399,7 @@ class _AyarlarPageState extends State<_AyarlarPage> {
       // GET /settings
       final res = await http.get(
         Uri.parse('${_base()}/settings?user_id=$kUserId'),
+        headers: _authHeaders(),
       );
       if (res.statusCode == 200) {
         final d = jsonDecode(res.body) as Map<String, dynamic>;
@@ -1413,6 +1421,7 @@ class _AyarlarPageState extends State<_AyarlarPage> {
       // GET /model/info
       final infoRes = await http.get(
         Uri.parse('${_base()}/model/info?user_id=$kUserId'),
+        headers: _authHeaders(),
       );
       if (infoRes.statusCode == 200) {
         final info = jsonDecode(infoRes.body) as Map<String, dynamic>;
@@ -1434,7 +1443,7 @@ class _AyarlarPageState extends State<_AyarlarPage> {
       // POST /settings
       final res = await http.post(
         Uri.parse('${_base()}/settings'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _authHeaders({'Content-Type': 'application/json'}),
         body: jsonEncode({
           'user_id': kUserId,
           'model': _selectedModel,
@@ -1466,7 +1475,7 @@ class _AyarlarPageState extends State<_AyarlarPage> {
       // POST /fine-tune
       final res = await http.post(
         Uri.parse('${_base()}/fine-tune'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _authHeaders({'Content-Type': 'application/json'}),
         body: jsonEncode({
           'user_id': kUserId,
           'algorithm': _selectedAlgo,
