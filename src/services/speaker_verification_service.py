@@ -11,7 +11,7 @@ beklenmeyen bir hata olursa doğrulama atlanır (fail-open) ve mevcut akış
 olduğu gibi devam eder.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -99,7 +99,7 @@ class SpeakerVerificationService:
         centroid = torch.nn.functional.normalize(
             torch.stack(embeddings).mean(dim=0), dim=0
         )
-        created_at = datetime.utcnow().isoformat()
+        created_at = datetime.now(timezone.utc).isoformat()
 
         profile_path = self._profile_path(user_id)
         profile_path.parent.mkdir(parents=True, exist_ok=True)
@@ -128,7 +128,12 @@ class SpeakerVerificationService:
         if embedding is None:
             return True, None
 
-        score = float(torch.dot(embedding, profile))
+        try:
+            score = float(torch.dot(embedding, profile))
+        except Exception as e:
+            logger.warning(f"Benzerlik hesaplanamadı ({user_id}): {e}")
+            return True, None
+
         return score >= config.SPEAKER_VERIFY_THRESHOLD, score
 
     def status(self, user_id: str) -> dict:

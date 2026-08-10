@@ -1471,8 +1471,7 @@ class _AyarlarPageState extends State<_AyarlarPage> {
       );
       if (res.statusCode == 200) {
         final d = jsonDecode(res.body) as Map<String, dynamic>;
-        if (!mounted) return;
-        setState(() => _voiceProfileStatus = {'exists': true, ...d});
+        await _fetchVoiceProfileStatus();
         _snack('Ses profili güncellendi (${d['sample_count']} kayıt).');
       } else {
         _snack('Ses profili güncellenemedi: ${res.statusCode}');

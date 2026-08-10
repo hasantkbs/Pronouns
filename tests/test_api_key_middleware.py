@@ -39,3 +39,13 @@ def test_apk_download_is_exempt_from_key():
 def test_download_path_is_exempt_from_key():
     res = client.get("/download/does-not-exist.wav")
     assert res.status_code != 401
+
+
+def test_voice_profile_status_requires_key():
+    res = client.get("/voice-profile/status?user_id=FurkanV1")
+    assert res.status_code == 401
+
+
+def test_voice_profile_rebuild_requires_key():
+    res = client.post("/voice-profile/rebuild?user_id=FurkanV1")
+    assert res.status_code == 401
