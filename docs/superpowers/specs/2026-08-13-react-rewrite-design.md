@@ -21,11 +21,21 @@ bir uygulamayla değiştirmek. İkinci hedef: uygulamanın hangi ağdan olursa o
 - Backend CORS zaten `allow_origins=["*"]` (api.py:45) — yeni bir web
   origin'i için ek backend değişikliği gerekmiyor.
 - Ses upload endpoint'leri (`/record`, `/translate`) gelen dosyayı **hiç
-  dönüştürmeden** (`shutil.copyfileobj`) `.wav` uzantısıyla kaydediyor.
-  Tarayıcı `MediaRecorder` API'si genelde WebM/Opus üretir — dosya adı `.wav`
-  olsa da içerik farklıdır. Mevcut pipeline (librosa → audioread → ffmpeg
-  fallback) çoğu formatı sessizce çözebiliyor ama bu kırılgan bir varsayım;
-  aşağıda ele alınıyor.
+  dönüştürmeden** (`shutil.copyfileobj`) `.wav` uzantısıyla kaydediyor —
+  yani istemcinin gerçek WAV bytes göndermesi şart.
+- **Furkanca paneli basit "kayda bas" değil, sürekli dinleme + VAD
+  (Voice Activity Detection) ile çalışıyor** (`lib/vad.dart`): ham PCM16
+  akışı RMS eşiğiyle (`onsetThreshold=0.012`) konuşma başlangıcı/bitişini
+  algılıyor, 300ms pre-roll tutuyor, 1sn sessizlikte veya 12sn'de segmenti
+  kapatıp WAV'a çevirip `/translate`'e yolluyor. Bu, platform bağımsız saf
+  mantık (`VadSegmenter` sınıfı) — React'e birebir port edilecek.
+- **Kayıt paneli** basit sabit süreli (geri sayımlı) kayıt kullanıyor, VAD
+  yok. Ayrıca **çevrimdışı-öncelikli**: kayıtlar önce cihaza (manifest.json
+  + wav dosyaları, `lib/pending_recordings.dart`) yazılıyor, "Bekleyen
+  Kayıtlar" ekranından toplu olarak `/record`'a yükleniyor. Web'de bunun
+  karşılığı IndexedDB.
+- `/record` multipart alanları: `user_id`, `word`, dosya alanı `audio`
+  (rep sayısı sunucu tarafında hesaplanıyor, istemci göndermiyor).
 - API anahtarı (`X-API-Key`) zaten var (`vpnsiz-erisim` tasarımından); web
   tarafında JS bundle içine gömülecek. APK'nın aksine web'de bu tamamen
   görünürdür (DevTools). Proje zaten benzer risk seviyesini kabul etmiş
@@ -65,17 +75,26 @@ Tek React (Vite + TypeScript) projesi, **Capacitor** ile Android'e sarılır.
   endpoint'i, kullanıcı tarafında değişiklik yok).
 
 ### Platform farkı — ses kaydı
-Tek bir `AudioRecorder` soyutlaması, iki implementasyon:
-- **Web:** `MediaRecorder` API (`audio/webm;codecs=opus`), kayıt bitince
-  tarayıcıda **WAV'a encode edilir** (küçük bir JS WAV encoder, örn.
-  `extendable-media-recorder` + wav-encoder, ya da PCM'i doğrudan
-  `AudioContext.decodeAudioData` ile çözüp WAV header yazan ~50 satırlık
-  yardımcı fonksiyon). Backend'e her zaman gerçek WAV bytes gider.
-- **Android (Capacitor):** `@capacitor-community/voice-recorder` (veya
-  benzeri) native mikrofon plugin'i, çıktısı zaten WAV/PCM.
+Web ve Capacitor/Android **aynı kodu** kullanır: Capacitor bir native
+WebView'de çalıştığı için `navigator.mediaDevices.getUserMedia` ve Web
+Audio API her iki platformda da çalışır (Android tarafında sadece
+`AndroidManifest.xml`'e `RECORD_AUDIO` izni eklenir, native bir ses
+plugin'i gerekmez). Bu, platform-özel kod miktarını ciddi azaltır.
+
+Ortak ses hattı (`lib/vad.ts`, Dart'taki `vad.dart`'ın birebir portu):
+1. `AudioContext` + `ScriptProcessorNode` ham PCM16 chunk'ları üretir
+   (context'in kendi `sampleRate`'i kullanılır, 16000'e zorlanmaz — backend
+   zaten `librosa.load(sr=...)` ile yeniden örnekliyor).
+2. **Furkanca paneli:** chunk'lar `VadSegmenter`'a beslenir; `ended`
+   olayında segment `pcmToWav()` ile WAV Blob'a çevrilip `/translate`'e
+   gönderilir.
+3. **Kayıt paneli:** VAD kullanılmaz; sabit süreli (geri sayımlı) kayıt
+   PCM chunk'larını biriktirir, süre bitince `pcmToWav()` ile WAV Blob
+   üretir, IndexedDB'ye ("pending recordings") yazılır.
 
 Bu sayede backend hiç değişmeden (`shutil.copyfileobj` aynı kalır), her iki
-platformdan da gerçek WAV içeriği garanti edilir.
+platformdan da gerçek WAV içeriği garanti edilir; `MediaRecorder`/WebM yolu
+kullanılmaz (VAD'ın ham PCM'e ihtiyacı olduğu için zaten uygun değildi).
 
 ### API iletişimi
 Mevcut endpoint sözleşmesi birebir korunur (`/settings`, `/collect/*`,
@@ -88,16 +107,19 @@ aynı, sabit HTTPS adresi.
 ```
 src/
   pages/
-    FurkancaPage.tsx     // dinle → /translate → oynat, geçmiş
-    KayitPage.tsx        // /collect/word-sets, /collect/next-word,
-                          // /collect/progress, /record
-    AyarlarLoginPage.tsx // admin/adminpassword kilidi (mevcut basit model)
-    AyarlarPage.tsx      // /settings, /model/info, /voice-profile/*
+    FurkancaPage.tsx      // sürekli dinle (VAD) → /translate → oynat, geçmiş
+    KayitPage.tsx         // /collect/word-sets, /collect/next-word,
+                           // /collect/progress, sabit süreli kayıt → IndexedDB
+    PendingUploadsPage.tsx // IndexedDB'deki bekleyen kayıtları listeler,
+                           // "Tümünü Yükle" → /record
+    AyarlarLoginPage.tsx  // admin/adminpassword kilidi (mevcut basit model)
+    AyarlarPage.tsx       // /settings, /model/info, /voice-profile/*
   lib/
-    api.ts                // fetch wrapper + X-API-Key header
-    audioRecorder.ts       // platform-agnostic kayıt soyutlaması
-    wavEncoder.ts           // web-only WebM→WAV normalize
-  App.tsx                 // routing (3 buton ana ekran, aynı Flutter akışı)
+    api.ts                 // fetch wrapper + X-API-Key header
+    vad.ts                  // VadSegmenter + calculateRms + pcmToWav (vad.dart portu)
+    audioCapture.ts          // getUserMedia + ScriptProcessorNode → PCM16 chunk stream
+    pendingRecordingsStore.ts // IndexedDB CRUD (pending_recordings.dart portu)
+  App.tsx                  // routing (3 buton ana ekran, aynı Flutter akışı)
 ```
 
 ## Hata Yönetimi
@@ -108,9 +130,9 @@ src/
 - Mikrofon izni reddedilirse (web: `getUserMedia` reddi; Android: Capacitor
   permission reddi) açık bir izin isteği ekranı gösterilir — sessiz
   başarısızlık yok.
-- WAV encode başarısız olursa (web) kullanıcıya "kayıt işlenemedi, tekrar
-  deneyin" mesajı gösterilir, ham dosya backend'e **gönderilmez** (format
-  garantisi bozulmasın diye).
+- `getUserMedia` PCM chunk akışında beklenmedik biçimde kesilirse (ör. sekme
+  arka plana alınır) kullanıcıya "kayıt işlenemedi, tekrar deneyin" mesajı
+  gösterilir, eksik/yarım segment backend'e **gönderilmez**.
 
 ## Dağıtım / Geçiş Planı
 
@@ -133,7 +155,10 @@ src/
   (SNR/duration) yeni pipeline ile eski Flutter kayıtlarıyla karşılaştırılır
   (regresyon kontrolü — bkz. dünkü SNR temizliği, yeni format hatası aynı
   soruna yol açmasın).
-- **Otomatik:** `wavEncoder.ts` için birim testi (bilinen bir WebM örneği →
-  WAV header/örnekleme doğrulaması).
+- **Otomatik:** `vad.ts` için birim testi — `calculateRms` (sessizlik/ses
+  ayrımı), `VadSegmenter` (started/ended/discardedTooShort olayları,
+  pre-roll dahil), `pcmToWav` (WAV header alanlarının doğruluğu). Bu
+  fonksiyonlar saf mantık olduğundan tarayıcı ortamı gerekmeden (Vitest,
+  Node) test edilir.
 - CORS, API-key header'ın her istekte doğru gittiği manuel `curl`/DevTools
   Network sekmesi ile doğrulanır.
