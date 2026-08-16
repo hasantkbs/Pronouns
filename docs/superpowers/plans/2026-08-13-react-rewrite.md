@@ -1985,7 +1985,9 @@ Expected: `88.255.236.143`. If empty, DNS hasn't propagated yet — wait and ret
 
 - [ ] **Step 3: Create the nginx site config**
 
-`/etc/nginx/sites-available/app-furkanca`:
+> **Actual outcome (superseded during execution):** the config below (serving `web/dist` directly via nginx `root`) was the original plan but turned out to be undeployable — `/home/mayasoft` is `750`, so the `www-data` nginx user cannot traverse into it, regardless of `web/dist`'s own permissions. What actually shipped: nginx reverse-proxies to a local `serve -s dist -l 4003` process instead (same pattern as every other site on this host — see Task 13's Step 1 for the live config and the process-restart script). The `root`/`try_files` version below is kept only as a record of the original (abandoned) intent.
+
+`/etc/nginx/sites-available/app-furkanca` (original intent, NOT what's live):
 ```nginx
 server {
     listen 80;
@@ -2018,15 +2020,15 @@ Expected: `nginx -t` reports syntax OK; reload succeeds.
 sudo certbot --nginx -d app.furkanca.algorixstudio.com --non-interactive --agree-tos -m algorixinfo@gmail.com
 ```
 
-Expected: certbot obtains a certificate and rewrites `/etc/nginx/sites-enabled/app-furkanca` to add the `listen 443 ssl` block + HTTP→HTTPS redirect (same pattern as the existing `furkanca` site).
+Expected: certbot obtains a certificate and rewrites `/etc/nginx/sites-enabled/app-furkanca` to add the `listen 443 ssl` block + HTTP→HTTPS redirect (same pattern as the existing `furkanca` site). This step ran as planned — only Step 3's `location /` block was later replaced with a `proxy_pass` (see above); the TLS/certbot setup is unaffected.
 
-- [ ] **Step 5: Verify HTTPS serves a 404 (no build deployed yet)**
+- [ ] **Step 5: Verify HTTPS responds**
 
 ```bash
 curl -sS -o /dev/null -w "HTTP %{http_code}\n" https://app.furkanca.algorixstudio.com/
 ```
 
-Expected: `HTTP 404` (nginx serves from `web/dist`, which doesn't exist until Task 13 deploys a build) — this confirms TLS + nginx routing work; Task 13 fixes the 404 by deploying the actual build.
+Originally expected `HTTP 404` (nginx serving from an empty `web/dist`). Since the final config proxies to a `serve` process instead of reading `web/dist` directly, this now returns `HTTP 200` as soon as the `serve` process is running (Task 13, Step 2) — confirmed end-to-end during Task 12's own review.
 
 - [ ] **Step 6: Commit the nginx site source (for reference; the live file lives outside the repo)**
 
@@ -2047,7 +2049,7 @@ git commit -m "Add app.furkanca.algorixstudio.com nginx config for the React web
 - Create: `web/deploy-android.sh`
 
 **Interfaces:**
-- Consumes: `npm run build` (Task 1), `npm run cap:build:apk` (Task 11), the nginx site from Task 12 (which reverse-proxies `app.furkanca.algorixstudio.com` to a local `serve` process on `127.0.0.1:4003` — nginx does NOT serve `web/dist` directly via `root`, because `/home/mayasoft` is `750` and unreadable by the `www-data` nginx user; see Task 12's ledger note).
+- Consumes: `npm run build` (Task 1), `npm run cap:build:apk` (Task 11), the nginx site from Task 12 (which reverse-proxies `app.furkanca.algorixstudio.com` to a local `serve` process on `127.0.0.1:4003` — nginx does NOT serve `web/dist` directly via `root`, because `/home/mayasoft` is `750` and unreadable by the `www-data` nginx user; see Task 12, Step 3's "Actual outcome" note above).
 - Produces: the live production web app (via a restarted `serve` process) and the APK served from the existing `/apk` endpoint.
 
 - [ ] **Step 1: Add a web deploy script**
