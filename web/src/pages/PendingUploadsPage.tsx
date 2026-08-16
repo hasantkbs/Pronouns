@@ -76,7 +76,7 @@ export default function PendingUploadsPage() {
                 <span>Tekrar {i + 1}</span>
                 {status[take.id] === 'uploading' && <span>Yükleniyor...</span>}
                 {status[take.id] === 'error' && <span title={errors[take.id]}>Hata</span>}
-                {!status[take.id] && (
+                {status[take.id] !== 'uploading' && (
                   <>
                     <button
                       onClick={() => {
