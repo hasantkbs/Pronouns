@@ -80,7 +80,7 @@ export default function FurkancaPage() {
         await new Promise<void>((resolve) => {
           audio.onended = () => resolve();
           audio.onerror = () => resolve();
-          void audio.play();
+          audio.play().catch(() => resolve());
         });
       }
       setState('listening');
