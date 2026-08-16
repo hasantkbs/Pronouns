@@ -84,29 +84,38 @@ export default function KayitPage() {
     setStatus(null);
     setRemaining(seconds);
 
-    const chunks: Int16Array[] = [];
-    const handle = await startAudioCapture((chunk) => chunks.push(chunk));
+    let handle: Awaited<ReturnType<typeof startAudioCapture>> | null = null;
+    try {
+      const chunks: Int16Array[] = [];
+      handle = await startAudioCapture((chunk) => chunks.push(chunk));
 
-    for (let i = seconds; i > 0; i--) {
-      setRemaining(i);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      for (let i = seconds; i > 0; i--) {
+        setRemaining(i);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      handle.stop();
+
+      const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+      const merged = new Int16Array(totalLength);
+      let offset = 0;
+      for (const c of chunks) {
+        merged.set(c, offset);
+        offset += c.length;
+      }
+
+      const wavBlob = pcmToWav(merged, handle.sampleRate, 1);
+      await addTake(word, wavBlob);
+      await refreshPendingCounts();
+      setStatus(`Cihazda kaydedildi: ${word}`);
+    } catch (e) {
+      setStatus(`Hata: ${(e as Error).message}`);
+      if (handle) {
+        handle.stop();
+      }
+    } finally {
+      setRecording(false);
+      setRemaining(0);
     }
-    handle.stop();
-
-    const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
-    const merged = new Int16Array(totalLength);
-    let offset = 0;
-    for (const c of chunks) {
-      merged.set(c, offset);
-      offset += c.length;
-    }
-
-    const wavBlob = pcmToWav(merged, handle.sampleRate, 1);
-    await addTake(word, wavBlob);
-    await refreshPendingCounts();
-    setStatus(`Cihazda kaydedildi: ${word}`);
-    setRecording(false);
-    setRemaining(0);
   }
 
   const allDone = word === null;
