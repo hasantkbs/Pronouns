@@ -56,6 +56,10 @@ _API_KEY_EXEMPT_PREFIXES = ("/download/",)
 
 @app.middleware("http")
 async def require_api_key(request: Request, call_next):
+    if request.method == "OPTIONS":
+        # CORS preflight istekleri özel header taşımaz; burada engellenirse
+        # tarayıcı asıl isteği hiç göndermez (web istemcileri için kritik).
+        return await call_next(request)
     path = request.url.path
     if path in _API_KEY_EXEMPT_PATHS or path.startswith(_API_KEY_EXEMPT_PREFIXES):
         return await call_next(request)
