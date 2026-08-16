@@ -54,7 +54,7 @@ export async function getModelInfo(): Promise<ModelInfoResponse> {
 export interface VoiceProfileStatus {
   exists: boolean;
   sample_count: number;
-  created_at: string;
+  created_at: string | null;
 }
 
 export async function getVoiceProfileStatus(): Promise<VoiceProfileStatus> {
@@ -104,6 +104,7 @@ export async function getNextWord(setFile: string, exclude: string[]): Promise<N
   const res = await fetch(`${API_BASE_URL}/collect/next-word?${params.toString()}`, {
     headers: authHeaders(),
   });
+  if (!res.ok) throw new Error(`Sonraki kelime alınamadı: ${res.status}`);
   const data = (await res.json()) as NextWordResponse;
   if (data.error) throw new Error(data.error);
   return data;
@@ -144,7 +145,8 @@ export interface TranslateResponse {
   rejected?: boolean;
   reason?: string;
   response_text?: string;
-  audio_url?: string;
+  audio_url?: string | null;
+  error?: string;
 }
 
 export async function translateSpeech(audioBlob: Blob): Promise<TranslateResponse> {
@@ -158,7 +160,9 @@ export async function translateSpeech(audioBlob: Blob): Promise<TranslateRespons
   });
   const body = await res.text();
   if (!res.ok) throw new Error(`Sunucu hatası (${res.status}): ${body}`);
-  return JSON.parse(body) as TranslateResponse;
+  const data = JSON.parse(body) as TranslateResponse;
+  if (data.error) throw new Error(data.error);
+  return data;
 }
 
 export function resolveUrl(pathOrUrl: string): string {
