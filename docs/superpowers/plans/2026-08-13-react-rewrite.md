@@ -2047,18 +2047,29 @@ git commit -m "Add app.furkanca.algorixstudio.com nginx config for the React web
 - Create: `web/deploy-android.sh`
 
 **Interfaces:**
-- Consumes: `npm run build` (Task 1), `npm run cap:build:apk` (Task 11), the nginx site from Task 12.
-- Produces: the live production web app and the APK served from the existing `/apk` endpoint.
+- Consumes: `npm run build` (Task 1), `npm run cap:build:apk` (Task 11), the nginx site from Task 12 (which reverse-proxies `app.furkanca.algorixstudio.com` to a local `serve` process on `127.0.0.1:4003` — nginx does NOT serve `web/dist` directly via `root`, because `/home/mayasoft` is `750` and unreadable by the `www-data` nginx user; see Task 12's ledger note).
+- Produces: the live production web app (via a restarted `serve` process) and the APK served from the existing `/apk` endpoint.
 
 - [ ] **Step 1: Add a web deploy script**
 
-`web/deploy-web.sh`:
+`web/deploy-web.sh` — builds, then restarts the local static-file-server process nginx proxies to (kills any previous instance via a PID file, so re-running this script is idempotent):
 ```bash
 #!/bin/bash
 set -e
 cd "$(dirname "$0")"
 npm run build
-echo "✅ Deployed: nginx serves web/dist directly, no copy needed."
+
+PIDFILE="/tmp/furkanca-web-serve.pid"
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  kill "$(cat "$PIDFILE")"
+  sleep 1
+fi
+
+nohup npx serve -s dist -l 4003 > /tmp/furkanca-web-serve.log 2>&1 &
+echo $! > "$PIDFILE"
+sleep 2
+
+echo "✅ Deployed: serve process running (PID $(cat "$PIDFILE")) on 127.0.0.1:4003, nginx proxies app.furkanca.algorixstudio.com to it."
 echo "   Verify: curl -sS -o /dev/null -w 'HTTP %{http_code}\n' https://app.furkanca.algorixstudio.com/"
 ```
 
