@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Furkanca</string>
+    <string name="title_activity_main">Furkanca</string>
+    <string name="package_name">com.algorixstudio.furkanca</string>
+    <string name="custom_url_scheme">com.algorixstudio.furkanca</string>
+</resources>
