@@ -3,6 +3,7 @@
 
 import os
 import sys
+import random
 from pathlib import Path
 
 # Proje kök dizinini sys.path'e ekle
@@ -39,6 +40,13 @@ try:
 except ImportError:
     AUDIOMENTATIONS_AVAILABLE = False
     print("⚠️  audiomentations bulunamadı. Augmentation kullanılamayacak.")
+
+def set_seed(seed: int):
+    """Reprodüsibilite için ağırlık başlangıcı, veri karıştırma ve augmentation RNG'lerini sabitler."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 # Linux sunucu için logging yapılandırması
 def setup_logging(user_id):
@@ -580,7 +588,7 @@ class PersonalizedTrainer:
                     remove_columns=eval_dataset.column_names,
                     batched=True,
                     batch_size=config.FINETUNE_BATCH_SIZE,
-                    num_proc=num_proc
+                    num_proc=map_num_proc
                 )
                 
                 processed_eval_dataset = processed_eval_dataset.filter(
@@ -608,6 +616,7 @@ class PersonalizedTrainer:
             batch_size=config.FINETUNE_BATCH_SIZE,
             collate_fn=data_collator,
             shuffle=True,
+            generator=torch.Generator().manual_seed(config.SEED),
             num_workers=config.DATALOADER_NUM_WORKERS,
             pin_memory=config.DATALOADER_PIN_MEMORY,
             prefetch_factor=config.DATALOADER_PREFETCH_FACTOR if config.DATALOADER_NUM_WORKERS > 0 else None,
@@ -880,7 +889,9 @@ def main():
     parser.add_argument("--base_model", type=str, help="İnce ayar için kullanılacak temel modelin yolu. Varsayılan: config.py'deki model.", default=None)
     
     args = parser.parse_args()
-    
+
+    set_seed(config.SEED)
+
     trainer = PersonalizedTrainer(user_id=args.user_id, base_model_path=args.base_model)
     trainer.run()
 

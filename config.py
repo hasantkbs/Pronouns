@@ -7,6 +7,12 @@ Konuşma Bozukluğu Ses Tanıma Sistemi - Yapılandırma Dosyası
 MODEL_NAME = "mpoyraz/wav2vec2-xls-r-300m-cv8-turkish"  # Varsayılan model
 ORNEKLEME_ORANI = 16000  # Hz
 
+# Eğitim reprodüsibilitesi: ağırlık başlangıcı, DataLoader karıştırma ve
+# augmentation aynı seed ile tekrarlanabilir olsun diye sabitlendi — sabit
+# seed olmadan aynı config+veri ile run'lar arası WER %65 ile %89 arasında
+# oynayabiliyordu (2026-08-17).
+SEED = 42
+
 # --- Dil Modeli Ayarları (Opsiyonel) ---
 KENLM_MODEL_PATH = "data/lm/lm.arpa"
 LM_ALPHA = 0.5       # Dil modeli ağırlığı (CTC beam search için)
@@ -58,8 +64,12 @@ WARMUP_STEPS = 100                 # Öğrenme oranı ısınma adımları
 WEIGHT_DECAY = 0.01                # Ağırlık sönümü (overfitting engelleme)
 MAX_GRAD_NORM = 1.0                # Gradyan kırpma (stabilite için)
 # LoRA adapter ayarları
-# r=128: Konuşma bozukluğundaki ses değişimlerini daha detaylı yakalamak için kapasite artırıldı
-ADAPTER_REDUCTION_FACTOR = 128 
+# reduction_factor = hidden_size / bottleneck_dim: DÜŞÜK değer DAHA FAZLA kapasite
+# demektir. 32 denendi (4 kat daha fazla eğitilebilir parametre) ama sonuç
+# WER %94.2 ile 128'in ürettiği en iyi modelden (WER %65.0, 2026-08-11) belirgin
+# biçimde kötü çıktı — küçük veri setinde artan kapasite overfit/instabiliteye yol açtı.
+# 128'e geri alındı.
+ADAPTER_REDUCTION_FACTOR = 128
 
 # Eğitim stabilite ayarları
 EARLY_STOPPING_PATIENCE = 30       # Daha fazla sabır (daha derin öğrenme için)
