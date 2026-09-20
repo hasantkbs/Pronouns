@@ -3,7 +3,6 @@
 
 import os
 import sys
-import random
 from pathlib import Path
 
 # Proje kök dizinini sys.path'e ekle
@@ -27,7 +26,7 @@ from torch.optim import AdamW
 from accelerate import Accelerator
 from tqdm import tqdm
 from datasets import Dataset, Audio
-from src.utils.utils import save_model_and_processor
+from src.utils.utils import save_model_and_processor, set_seed, build_augment_pipeline
 from src.services.reporting_service import ReportingService
 import config
 import librosa
@@ -40,13 +39,6 @@ try:
 except ImportError:
     AUDIOMENTATIONS_AVAILABLE = False
     print("⚠️  audiomentations bulunamadı. Augmentation kullanılamayacak.")
-
-def set_seed(seed: int):
-    """Reprodüsibilite için ağırlık başlangıcı, veri karıştırma ve augmentation RNG'lerini sabitler."""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
 
 # Linux sunucu için logging yapılandırması
 def setup_logging(user_id):
@@ -114,39 +106,6 @@ class DataCollatorCTCWithPadding:
         )
         batch["labels"] = labels
         return batch
-
-def build_augment_pipeline(sampling_rate: int):
-    """
-    Konuşma bozukluğu için optimize edilmiş augmentation pipeline.
-    Parametreler config.py üzerinden kontrol edilir; hafif bozulma kullanılır
-    böylece bozukluk kalıpları korunur.
-    """
-    if not AUDIOMENTATIONS_AVAILABLE:
-        return None
-
-    return A.Compose([
-        A.AddGaussianNoise(
-            min_amplitude=config.AUGMENT_NOISE_MIN,
-            max_amplitude=config.AUGMENT_NOISE_MAX,
-            p=0.3,
-        ),
-        A.TimeStretch(
-            min_rate=config.AUGMENT_TIME_STRETCH_MIN,
-            max_rate=config.AUGMENT_TIME_STRETCH_MAX,
-            p=0.3,
-            leave_length_unchanged=False,
-        ),
-        A.PitchShift(
-            min_semitones=config.AUGMENT_PITCH_MIN,
-            max_semitones=config.AUGMENT_PITCH_MAX,
-            p=0.3,
-        ),
-        A.TimeMask(
-            min_band_part=config.AUGMENT_TIME_MASK_MIN,
-            max_band_part=config.AUGMENT_TIME_MASK_MAX,
-            p=0.2,
-        ),
-    ], p=config.AUGMENT_PROBABILITY)
 
 def _standalone_preprocess_function(examples, processor, augmenter=None):
     """

@@ -9,6 +9,14 @@ import os
 from pathlib import Path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import config
+import random
+import torch
+
+try:
+    import audiomentations as A
+    AUDIOMENTATIONS_AVAILABLE = True
+except ImportError:
+    AUDIOMENTATIONS_AVAILABLE = False
 
 
 # --- Ses Kayıt Fonksiyonu ---
@@ -583,6 +591,48 @@ def normalize_path_for_cross_platform(file_path: str, base_path: Path) -> str:
             return file_path_obj.as_posix()
 
     return file_path_obj.as_posix()  # Her zaman forward slash
+
+
+def set_seed(seed: int):
+    """Reprodüsibilite için ağırlık başlangıcı, veri karıştırma ve augmentation RNG'lerini sabitler."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def build_augment_pipeline(sampling_rate: int):
+    """
+    Konuşma bozukluğu için optimize edilmiş augmentation pipeline.
+    Parametreler config.py üzerinden kontrol edilir; hafif bozulma kullanılır
+    böylece bozukluk kalıpları korunur.
+    """
+    if not AUDIOMENTATIONS_AVAILABLE:
+        return None
+
+    return A.Compose([
+        A.AddGaussianNoise(
+            min_amplitude=config.AUGMENT_NOISE_MIN,
+            max_amplitude=config.AUGMENT_NOISE_MAX,
+            p=0.3,
+        ),
+        A.TimeStretch(
+            min_rate=config.AUGMENT_TIME_STRETCH_MIN,
+            max_rate=config.AUGMENT_TIME_STRETCH_MAX,
+            p=0.3,
+            leave_length_unchanged=False,
+        ),
+        A.PitchShift(
+            min_semitones=config.AUGMENT_PITCH_MIN,
+            max_semitones=config.AUGMENT_PITCH_MAX,
+            p=0.3,
+        ),
+        A.TimeMask(
+            min_band_part=config.AUGMENT_TIME_MASK_MIN,
+            max_band_part=config.AUGMENT_TIME_MASK_MAX,
+            p=0.2,
+        ),
+    ], p=config.AUGMENT_PROBABILITY)
 
 
 def resolve_audio_path(raw_path: str, user_base: Path) -> str | None:
