@@ -191,15 +191,20 @@ class WhisperPersonalizedTrainer:
         sample_rate = config.ORNEKLEME_ORANI
 
         def preprocess(batch):
-            audio, _ = librosa.load(batch["file_path"], sr=sample_rate)
-            if augmenter:
-                audio = augmenter(samples=audio, sample_rate=sample_rate)
-            batch["input_features"] = self.processor.feature_extractor(
-                audio, sampling_rate=sample_rate
-            ).input_features[0]
-            batch["labels"] = self.processor.tokenizer(
-                normalize_turkish_text(batch["transcript"])
-            ).input_ids
+            try:
+                audio, _ = librosa.load(batch["file_path"], sr=sample_rate)
+                if augmenter:
+                    audio = augmenter(samples=audio, sample_rate=sample_rate)
+                batch["input_features"] = self.processor.feature_extractor(
+                    audio, sampling_rate=sample_rate
+                ).input_features[0]
+                batch["labels"] = self.processor.tokenizer(
+                    normalize_turkish_text(batch["transcript"])
+                ).input_ids
+            except Exception as e:
+                print(f"   ⚠️  Atlanan dosya ({batch.get('file_path')}): {e}")
+                batch["input_features"] = None
+                batch["labels"] = None
             return batch
 
         # Ayni guvenlik deseni train_adapter.py'de bu oturumda duzeltildi: num_proc=1
@@ -210,6 +215,7 @@ class WhisperPersonalizedTrainer:
 
         dataset = Dataset.from_pandas(df)
         dataset = dataset.map(preprocess, remove_columns=dataset.column_names, num_proc=map_num_proc)
+        dataset = dataset.filter(lambda x: x["input_features"] is not None)
 
         print(f"   📈 {split.upper()} veri seti boyutu: {len(dataset)} kayıt")
         return dataset
