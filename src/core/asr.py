@@ -237,10 +237,21 @@ class ASRSystem:
 
             if self.model_type == "whisper":
                 input_features = self.processor(speech, sampling_rate=sr, return_tensors="pt").input_features.to(self.device)
+
+                generate_kwargs = {"language": "tr", "task": "transcribe"}
+                if self.user_vocabulary:
+                    # Whisper'in resmi hotword/context-biasing yontemi: kullanicinin
+                    # bildigi kelimeleri decoder'a "onceki baglam" gibi veriyoruz.
+                    # 50 kelime sinirlamasi Whisper'in decoder context budgetini asmamak icin.
+                    prompt_text = " ".join(self.user_vocabulary[:50])
+                    generate_kwargs["prompt_ids"] = self.processor.get_prompt_ids(
+                        prompt_text, return_tensors="pt"
+                    ).to(self.device)
+
                 with torch.no_grad():
-                    generated_ids = self.model.generate(input_features, language="tr", task="transcribe")
+                    generated_ids = self.model.generate(input_features, **generate_kwargs)
                 text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-                confidence = 0.85 
+                confidence = 0.85
             else:
                 input_values = self.processor(
                     speech,
