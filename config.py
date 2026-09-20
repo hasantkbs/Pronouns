@@ -4,7 +4,8 @@ Konuşma Bozukluğu Ses Tanıma Sistemi - Yapılandırma Dosyası
 """
 
 # --- ASR Model Ayarları ---
-MODEL_NAME = "mpoyraz/wav2vec2-xls-r-300m-cv8-turkish"  # Varsayılan model
+MODEL_NAME = "mpoyraz/wav2vec2-xls-r-300m-cv8-turkish"  # Varsayılan model (Wav2Vec2/CTC)
+WHISPER_MODEL_NAME = "selimc/whisper-large-v3-turbo-turkish"  # Whisper kişiselleştirme başlangıç noktası
 ORNEKLEME_ORANI = 16000  # Hz
 
 # Eğitim reprodüsibilitesi: ağırlık başlangıcı, DataLoader karıştırma ve
@@ -54,9 +55,6 @@ REPORTS_DIR = "reports"
 
 # --- Model İnce Ayar Ayarları ---
 FINETUNE_OUTPUT_DIR = "./asr_model_finetuned"
-FINETUNE_BATCH_SIZE = 4            # RTX A5000 için 16'dan 4'e düşürüldü (OOM engelleme)
-GRADIENT_ACCUMULATION_STEPS = 8    # Gradyan biriktirme (etkin batch size = 4 * 8 = 32, korundu)
-NUM_FINETUNE_EPOCHS = 50           # Daha fazla epoch ile daha derin öğrenme
 FINETUNE_EVAL_STEPS = 100
 FINETUNE_LOGGING_STEPS = 10
 FINETUNE_LEARNING_RATE = 3e-5      # Biraz daha yüksek LR
