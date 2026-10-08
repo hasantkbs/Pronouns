@@ -70,7 +70,7 @@ MAX_GRAD_NORM = 1.0                # Gradyan kırpma (stabilite için)
 ADAPTER_REDUCTION_FACTOR = 128
 
 # Eğitim stabilite ayarları
-EARLY_STOPPING_PATIENCE = 30       # Daha fazla sabır (daha derin öğrenme için)
+EARLY_STOPPING_PATIENCE = 10       # 30 -> 10: Whisper epoch başına uzun sürüyor
 NUM_FINETUNE_EPOCHS = 100          # Maksimum limit
 FINETUNE_BATCH_SIZE = 8            # 4'ten 8'e çıkarıldı
 GRADIENT_ACCUMULATION_STEPS = 4    # Toplam batch size 32 (8 * 4) korunuyor
