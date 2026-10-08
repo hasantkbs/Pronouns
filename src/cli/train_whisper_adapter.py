@@ -19,6 +19,7 @@ from datetime import datetime
 
 import librosa
 import pandas as pd
+import soundfile as sf
 import torch
 import evaluate
 from datasets import Dataset
@@ -71,6 +72,9 @@ def setup_logging(user_id):
 @dataclasses.dataclass
 class DataCollatorSpeechSeq2SeqWithPadding:
     processor: any
+    # Whisper'da tokenizer.bos_token_id (<|endoftext|>) != decoder_start_token_id
+    # (<|startoftranscript|>); model bu token'i kendisi ekledigi icin etiketten silinmeli.
+    decoder_start_token_id: int
 
     def __call__(self, features):
         input_features = [{"input_features": feature["input_features"]} for feature in features]
@@ -81,7 +85,7 @@ class DataCollatorSpeechSeq2SeqWithPadding:
 
         labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
 
-        if (labels[:, 0] == self.processor.tokenizer.bos_token_id).all().cpu().item():
+        if (labels[:, 0] == self.decoder_start_token_id).all().cpu().item():
             labels = labels[:, 1:]
 
         batch["labels"] = labels
@@ -111,6 +115,9 @@ class WhisperPersonalizedTrainer:
             self.base_model_path, language="tr", task="transcribe"
         )
         self.model = WhisperForConditionalGeneration.from_pretrained(self.base_model_path)
+        # Eval sirasindaki generate() dil algilamaya kalkmasin; asr.py ile ayni ayar
+        self.model.generation_config.language = "tr"
+        self.model.generation_config.task = "transcribe"
 
         peft_config = LoraConfig(
             r=config.ADAPTER_REDUCTION_FACTOR,
@@ -186,36 +193,38 @@ class WhisperPersonalizedTrainer:
         if df is None:
             return None
 
+        # Okunamayan (bozuk) ses dosyalarini egitimden once ele - sf.info sadece header okur.
+        def is_readable(path):
+            try:
+                sf.info(path)
+                return True
+            except Exception as e:
+                print(f"   ⚠️  Atlanan dosya ({path}): {e}")
+                return False
+
+        df = df[df["file_path"].apply(is_readable)]
+
         is_train = split == 'train'
         augmenter = self.augmenter if is_train else None
         sample_rate = config.ORNEKLEME_ORANI
 
-        def preprocess(batch):
-            try:
-                audio, _ = librosa.load(batch["file_path"], sr=sample_rate)
+        # Mel ozellikleri on-the-fly hesaplanir: tum veri setini onceden map() ile
+        # hesaplamak ~1.5 MB/ornek RAM tutar ve 15 GB'lik sunucuda OOM'a yol acar.
+        # Bonus: augmentation her epoch'ta yeniden uygulanir.
+        def transform(batch):
+            input_features, labels = [], []
+            for path, transcript in zip(batch["file_path"], batch["transcript"]):
+                audio, _ = librosa.load(path, sr=sample_rate)
                 if augmenter:
                     audio = augmenter(samples=audio, sample_rate=sample_rate)
-                batch["input_features"] = self.processor.feature_extractor(
-                    audio, sampling_rate=sample_rate
-                ).input_features[0]
-                batch["labels"] = self.processor.tokenizer(
-                    normalize_turkish_text(batch["transcript"])
-                ).input_ids
-            except Exception as e:
-                print(f"   ⚠️  Atlanan dosya ({batch.get('file_path')}): {e}")
-                batch["input_features"] = None
-                batch["labels"] = None
-            return batch
+                input_features.append(
+                    self.processor.feature_extractor(audio, sampling_rate=sample_rate).input_features[0]
+                )
+                labels.append(self.processor.tokenizer(normalize_turkish_text(transcript)).input_ids)
+            return {"input_features": input_features, "labels": labels}
 
-        # Ayni guvenlik deseni train_adapter.py'de bu oturumda duzeltildi: num_proc=1
-        # HuggingFace datasets'te hala bir multiprocessing pool acar ve "OSError: got
-        # end of file during message" hatasina yol acar. num_proc>1 disinda None kullan.
-        num_proc = min(config.DATA_PREPROCESSING_NUM_PROC, os.cpu_count() or 1)
-        map_num_proc = num_proc if num_proc > 1 else None
-
-        dataset = Dataset.from_pandas(df)
-        dataset = dataset.map(preprocess, remove_columns=dataset.column_names, num_proc=map_num_proc)
-        dataset = dataset.filter(lambda x: x["input_features"] is not None)
+        dataset = Dataset.from_pandas(df[["file_path", "transcript"]], preserve_index=False)
+        dataset.set_transform(transform)
 
         print(f"   📈 {split.upper()} veri seti boyutu: {len(dataset)} kayıt")
         return dataset
@@ -282,7 +291,10 @@ class WhisperPersonalizedTrainer:
         self.train_samples = len(train_dataset) if train_dataset else 0
         self.eval_samples = len(eval_dataset) if eval_dataset else 0
 
-        data_collator = DataCollatorSpeechSeq2SeqWithPadding(processor=self.processor)
+        data_collator = DataCollatorSpeechSeq2SeqWithPadding(
+            processor=self.processor,
+            decoder_start_token_id=self.model.config.decoder_start_token_id,
+        )
         has_eval = eval_dataset is not None
 
         training_args = Seq2SeqTrainingArguments(
@@ -304,6 +316,10 @@ class WhisperPersonalizedTrainer:
             gradient_checkpointing=config.GRADIENT_CHECKPOINTING,
             predict_with_generate=True,
             generation_max_length=225,
+            # set_transform kolonlari (file_path, transcript) Trainer tarafindan silinmemeli
+            remove_unused_columns=False,
+            dataloader_num_workers=4,
+            save_total_limit=3,
             report_to="none",
         )
 
