@@ -1,128 +1,120 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { resolveUrl, translateSpeech } from '../lib/api';
 import { startAudioCapture, type AudioCaptureHandle } from '../lib/audioCapture';
-import { VadSegmenter } from '../lib/vad';
+import { buttonEnabled, flowReducer, formatElapsed, initialFlowState, type Phase } from '../lib/furkancaFlow';
+import { ManualRecorder } from '../lib/manualRecorder';
 import { pcmToWav } from '../lib/wav';
 
-type ListenState = 'idle' | 'listening' | 'capturing' | 'uploading' | 'speaking' | 'error' | 'paused';
-
-interface TranslationEntry {
-  text: string;
-  time: Date;
-}
+const STATUS_TEXT: Record<Phase, string> = {
+  idle: 'Hazır',
+  starting: 'Mikrofon açılıyor...',
+  recording: 'Kaydediliyor...',
+  uploading: 'İşleniyor...',
+  speaking: 'Yanıt seslendiriliyor...',
+};
 
 export default function FurkancaPage() {
-  const [state, setState] = useState<ListenState>('idle');
-  const [paused, setPaused] = useState(false);
-  const [history, setHistory] = useState<TranslationEntry[]>([]);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(flowReducer, initialFlowState);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [level, setLevel] = useState(0);
 
   const captureRef = useRef<AudioCaptureHandle | null>(null);
-  const segmenterRef = useRef<VadSegmenter | null>(null);
-  const stateRef = useRef<ListenState>('idle');
-  const pausedRef = useRef(false);
+  const recorderRef = useRef<ManualRecorder | null>(null);
 
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
-
-  useEffect(() => {
-    pausedRef.current = paused;
-    if (paused) {
-      setState('paused');
-    } else if (stateRef.current === 'paused') {
-      setState('listening');
-    }
-  }, [paused]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    function handleChunk(chunk: Int16Array) {
-      if (pausedRef.current) return;
-      // Kendi çaldığı düzeltilmiş sesi mikrofonla yeniden algılayıp
-      // geri besleme döngüsüne girmemesi için yükleme/konuşma sırasında
-      // VAD'a chunk beslenmiyor.
-      if (stateRef.current === 'uploading' || stateRef.current === 'speaking') return;
-
-      const segmenter = segmenterRef.current;
-      const capture = captureRef.current;
-      if (!segmenter || !capture) return;
-      const event = segmenter.addChunk(chunk);
-      if (!event) return;
-
-      if (event.type === 'started') {
-        setState('capturing');
-      } else if (event.type === 'discardedTooShort') {
-        setState('listening');
-      } else if (event.type === 'ended' && event.pcmData) {
-        setState('uploading');
-        void handleSegment(event.pcmData, capture.sampleRate);
-      }
-    }
-
-    async function start() {
-      try {
-        const handle = await startAudioCapture(handleChunk);
-        if (cancelled) {
-          handle.stop();
-          return;
-        }
-        captureRef.current = handle;
-        segmenterRef.current = new VadSegmenter({ sampleRate: handle.sampleRate });
-        setState('listening');
-      } catch (e) {
-        setErrorMessage(`Mikrofon erişimi reddedildi: ${(e as Error).message}`);
-        setState('error');
-      }
-    }
-
-    void start();
-    return () => {
-      cancelled = true;
-      captureRef.current?.stop();
-    };
+  const stopCapture = useCallback(() => {
+    captureRef.current?.stop();
+    captureRef.current = null;
   }, []);
 
-  async function handleSegment(pcm: Int16Array, sampleRate: number) {
-    try {
-      const wavBlob = pcmToWav(pcm, sampleRate, 1);
-      const result = await translateSpeech(wavBlob);
+  // Sayfadan cikilinca mikrofon kapanir
+  useEffect(() => stopCapture, [stopCapture]);
 
+  const send = useCallback(async (pcm: Int16Array, sampleRate: number) => {
+    try {
+      const result = await translateSpeech(pcmToWav(pcm, sampleRate, 1));
       if (result.rejected) {
-        setState(pausedRef.current ? 'paused' : 'listening');
+        dispatch({ type: 'REJECTED' });
         return;
       }
-
-      const corrected = result.response_text?.trim() || '(boş yanıt)';
-      setHistory((prev) => [{ text: corrected, time: new Date() }, ...prev]);
-
+      const text = result.response_text?.trim() || '(boş yanıt)';
+      dispatch({ type: 'RESULT', text, hasAudio: Boolean(result.audio_url), time: new Date() });
       if (result.audio_url) {
-        setState('speaking');
         const audio = new Audio(resolveUrl(result.audio_url));
         await new Promise<void>((resolve) => {
           audio.onended = () => resolve();
           audio.onerror = () => resolve();
           audio.play().catch(() => resolve());
         });
+        dispatch({ type: 'AUDIO_DONE' });
       }
-      setState(pausedRef.current ? 'paused' : 'listening');
     } catch (e) {
-      setErrorMessage(`Hata: ${(e as Error).message}`);
-      setState(pausedRef.current ? 'paused' : 'listening');
+      dispatch({ type: 'FAILED', message: (e as Error).message });
     }
-  }
+  }, []);
+
+  const finishRecording = useCallback(() => {
+    const recorder = recorderRef.current;
+    const capture = captureRef.current;
+    // Ikinci cagri (dugme + 30 sn siniri ayni anda) yok sayilir
+    if (!recorder || !capture) return;
+    recorderRef.current = null;
+    const sampleRate = capture.sampleRate;
+    stopCapture();
+
+    const result = recorder.finish();
+    if (result.tooShort) {
+      dispatch({ type: 'TOO_SHORT' });
+      return;
+    }
+    dispatch({ type: 'STOP' });
+    void send(result.pcm, sampleRate);
+  }, [send, stopCapture]);
+
+  const startRecording = useCallback(async () => {
+    dispatch({ type: 'START' });
+    setElapsedMs(0);
+    setLevel(0);
+    try {
+      const handle = await startAudioCapture((chunk) => {
+        const recorder = recorderRef.current;
+        if (!recorder) return;
+        const reachedMax = recorder.push(chunk);
+        setElapsedMs(recorder.durationMs);
+        setLevel(recorder.level);
+        if (reachedMax) finishRecording();
+      });
+      captureRef.current = handle;
+      recorderRef.current = new ManualRecorder(handle.sampleRate);
+      // Dugme ancak mikrofon gercekten acildiktan sonra "Bitir" olur: ilk hece kacmaz
+      dispatch({ type: 'MIC_READY' });
+    } catch (e) {
+      dispatch({ type: 'MIC_FAILED', message: (e as Error).message });
+    }
+  }, [finishRecording]);
+
+  const recording = state.phase === 'recording';
 
   return (
     <main>
       <h1>Furkanca</h1>
-      <p>Durum: {state}</p>
-      <button onClick={() => setPaused((p) => !p)}>
-        {paused ? 'Dinlemeye Devam Et' : 'Dinlemeyi Duraklat'}
+      <button
+        type="button"
+        disabled={!buttonEnabled(state.phase)}
+        onClick={() => (recording ? finishRecording() : void startRecording())}
+        style={{ width: '100%', minHeight: '30vh', fontSize: '2rem' }}
+      >
+        {recording ? '⏹ Bitir' : '🎤 Konuşmaya Başla'}
       </button>
-      {errorMessage && <p role="alert">{errorMessage}</p>}
+      <p>Durum: {STATUS_TEXT[state.phase]}</p>
+      {recording && (
+        <p>
+          {formatElapsed(elapsedMs)}{' '}
+          <meter min={0} max={0.3} value={Math.min(level, 0.3)} aria-label="Ses seviyesi" />
+        </p>
+      )}
+      {state.error && <p role="alert">{state.error}</p>}
       <ul>
-        {history.map((entry, i) => (
+        {state.history.map((entry, i) => (
           <li key={i}>
             {entry.time.toLocaleTimeString()} — {entry.text}
           </li>
