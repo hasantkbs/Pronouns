@@ -71,6 +71,14 @@ async def require_api_key(request: Request, call_next):
 asr_systems = {}  # user_id -> ASRSystem
 correctors: Dict[str, SentenceCorrector] = {}  # user_id -> SentenceCorrector
 tts = PiperTTS(Path(config.PIPER_VOICE_PATH))  # CPU, API acilisinda bir kez
+
+_speaker_logger = logging.getLogger("speaker_verification")
+if not _speaker_logger.handlers:
+    _speaker_logger.setLevel(logging.INFO)
+    Path(config.LOG_DIR).mkdir(parents=True, exist_ok=True)
+    _sv_handler = logging.FileHandler(str(Path(config.LOG_DIR) / "speaker_verification.log"), encoding="utf-8")
+    _sv_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    _speaker_logger.addHandler(_sv_handler)
 training_services = {} # user_id -> TrainingService
 
 def _metadata_words_path(user_id: str) -> Path:
@@ -380,10 +388,9 @@ async def translate_speech(user_id: str = Form(...), audio: UploadFile = File(..
 
     if config.SPEAKER_VERIFY_ENABLED:
         is_match, score = speaker_service.verify(user_id, temp_input)
-        logging.getLogger("speaker_verification").info(
-            f"user={user_id} match={is_match} score={score}"
-        )
-        if not is_match:
+        blocking = config.SPEAKER_VERIFY_BLOCKING
+        _speaker_logger.info(f"user={user_id} match={is_match} score={score} blocking={blocking}")
+        if blocking and not is_match:
             os.remove(temp_input)
             return {"rejected": True, "reason": "speaker_mismatch"}
 

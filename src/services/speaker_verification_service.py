@@ -129,7 +129,8 @@ class SpeakerVerificationService:
             return True, None
 
         try:
-            score = float(torch.dot(embedding, profile))
+            # Profil diskten CPU'ya yuklenir, embedding GPU'da olabilir
+            score = float(torch.dot(embedding, profile.to(embedding.device)))
         except Exception as e:
             logger.warning(f"Benzerlik hesaplanamadı ({user_id}): {e}")
             return True, None

@@ -125,3 +125,30 @@ def test_status_reports_existing_profile(service, tmp_path):
 def test_status_reports_missing_profile(service):
     status = service.status("Nobody")
     assert status == {"exists": False, "sample_count": 0, "created_at": None}
+
+
+class _CudaFakeEncoder(_FakeEncoder):
+    def encode_batch(self, signal):
+        return super().encode_batch(signal).to("cuda")
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA yok")
+def test_verify_scores_when_profile_and_embedding_are_on_different_devices(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "BASE_PATH", str(tmp_path))
+    monkeypatch.setattr(config, "SPEAKER_VERIFY_THRESHOLD", 0.99)
+    monkeypatch.setattr(
+        SpeakerVerificationService, "_get_encoder",
+        classmethod(lambda cls: _CudaFakeEncoder()),
+    )
+    words_dir = tmp_path / "Furkan" / "words" / "merhaba"
+    words_dir.mkdir(parents=True)
+    for i in range(3):
+        _write_wav(words_dir / f"rep{i + 1}.wav", freq=220.0)
+    SpeakerVerificationService().enroll("Furkan")
+
+    probe = tmp_path / "probe.wav"
+    _write_wav(probe, freq=220.0)
+    # Canlidaki gibi: yeni servis profili diskten CPU'ya yukler, embedding GPU'da
+    is_match, score = SpeakerVerificationService().verify("Furkan", str(probe))
+    assert score is not None
+    assert is_match is True

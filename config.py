@@ -166,6 +166,9 @@ API_SECRET_KEY = "c2a6dd1afc678eb93f0c46c8c1528e2b1c07676fbde0951f"
 # /translate'e gelen ses segmentinin gerçekten kayıtlı kullanıcıya mı ait
 # olduğunu kontrol eder. False yapılırsa özellik tamamen devre dışı kalır.
 SPEAKER_VERIFY_ENABLED = True
+# Dokun-konus akisinda dugmeye Furkan basar; dogrulama karar vermez, sadece loglar.
+# True yapilirsa eslesmeyen ses eskisi gibi reddedilir.
+SPEAKER_VERIFY_BLOCKING = False
 SPEAKER_VERIFY_MODEL = "speechbrain/spkrec-ecapa-voxceleb"
 # Kosinüs benzerliği eşiği (0-1). FurkanV1 (40 örnekli profil) ile Admin
 # klasöründeki farklı konuşmacının kayıtları karşılaştırılarak kalibre

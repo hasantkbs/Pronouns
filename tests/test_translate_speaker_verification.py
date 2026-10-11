@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 import io
 import os
 import sys
@@ -42,6 +43,7 @@ def _fake_audio_file():
 
 
 def test_translate_rejects_when_speaker_does_not_match(monkeypatch):
+    monkeypatch.setattr(config, "SPEAKER_VERIFY_BLOCKING", True)
     monkeypatch.setattr(api, "speaker_service", _FakeSpeakerService(match=False))
     monkeypatch.setattr(api, "get_asr", lambda user_id: _FakeAsr())
 
@@ -177,3 +179,34 @@ def test_translate_empty_correction_is_not_understood(monkeypatch):
 
     assert _post_translate().json() == {"error": "Konuşma anlaşılamadı."}
     assert tts.texts == []
+
+
+def test_speaker_verification_is_not_blocking_by_default():
+    assert config.SPEAKER_VERIFY_BLOCKING is False
+
+
+def _patch_non_blocking_mismatch(monkeypatch):
+    monkeypatch.setattr(config, "SPEAKER_VERIFY_ENABLED", True)
+    monkeypatch.setattr(config, "SPEAKER_VERIFY_BLOCKING", False)
+    monkeypatch.setattr(api, "speaker_service", _FakeSpeakerService(match=False, score=0.1))
+    monkeypatch.setattr(api, "get_asr", lambda user_id: _FakeTextAsr())
+    monkeypatch.setattr(api, "get_corrector", lambda user_id, vocabulary: _FakeCorrector())
+    monkeypatch.setattr(api, "tts", _FakeTts())
+
+
+def test_translate_does_not_reject_when_verification_is_not_blocking(monkeypatch):
+    _patch_non_blocking_mismatch(monkeypatch)
+
+    body = _post_translate().json()
+
+    assert "rejected" not in body
+    assert body["response_text"] == "Ben okula geldim."
+
+
+def test_translate_logs_speaker_decision(monkeypatch, caplog):
+    _patch_non_blocking_mismatch(monkeypatch)
+
+    with caplog.at_level(logging.INFO, logger="speaker_verification"):
+        _post_translate()
+
+    assert "user=FurkanV1 match=False score=0.1 blocking=False" in caplog.text
