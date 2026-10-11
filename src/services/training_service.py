@@ -80,19 +80,18 @@ class TrainingService:
             "error": None
         })
 
-        # PersonalizedTrainer'ı içe aktar (döngüsel bağımlılığı önlemek için)
-        from src.cli.train_adapter import PersonalizedTrainer
-
         def run_training():
             try:
-                # Ayarları yükle
                 settings = self.settings_service.load_settings(self.user_id)
-                
-                # Config'i geçici olarak güncelle (opsiyonel, trainer config'den okuyor)
-                # Not: train_adapter.py şu an config.py'den direkt okuyor. 
-                # Gelecekte trainer'a settings objesi geçilebilir.
-                
-                trainer = PersonalizedTrainer(user_id=self.user_id)
+
+                # Trainer'lar burada içe aktarılır (döngüsel bağımlılığı önlemek için)
+                if settings.get("model") == "whisper":
+                    from src.cli.train_whisper_adapter import WhisperPersonalizedTrainer
+                    trainer = WhisperPersonalizedTrainer(user_id=self.user_id)
+                else:
+                    from src.cli.train_adapter import PersonalizedTrainer
+                    trainer = PersonalizedTrainer(user_id=self.user_id)
+
                 trainer.run()
                 
                 self._statuses[self.user_id].update({

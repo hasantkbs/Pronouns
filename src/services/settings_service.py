@@ -21,7 +21,7 @@ class SettingsService:
         path = SettingsService.get_settings_path(user_id)
         
         default_settings = {
-            "model": user_id,
+            "model": "wav2vec2",
             "algorithm": "lora",
             "self_learning": True,
             "learning_rate": float(config.FINETUNE_LEARNING_RATE),

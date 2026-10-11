@@ -199,10 +199,13 @@ def _get_next_word_and_rep(user_id: str, set_file: str, exclude: Optional[Set[st
     }
 
 def get_asr(user_id: str):
-    if user_id not in asr_systems:
-        model_path = ModelService.find_personalized_model(user_id)
-        asr_systems[user_id] = ASRSystem(model_name=model_path, user_id=user_id)
-    return asr_systems[user_id]
+    settings = settings_service.load_settings(user_id)
+    model_key = f"{user_id}_whisper" if settings.get("model") == "whisper" else user_id
+    if model_key not in asr_systems:
+        model_path = ModelService.find_personalized_model(model_key)
+        # user_id son eksiz kalir: kelime haznesi data/users/{user_id}/ altindan okunur
+        asr_systems[model_key] = ASRSystem(model_name=model_path, user_id=user_id)
+    return asr_systems[model_key]
 
 def get_training_service(user_id: str):
     if user_id not in training_services:
