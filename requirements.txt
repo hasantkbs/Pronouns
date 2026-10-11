@@ -70,6 +70,7 @@ packaging
 pandas>=2.0.0
 peft>=0.3.0
 pillow
+piper-tts==1.8.0
 platformdirs
 pluggy
 pooch

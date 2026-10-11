@@ -80,6 +80,7 @@ GRADIENT_ACCUMULATION_STEPS = 4    # Toplam batch size 32 (8 * 4) korunuyor
 # 0.6: %60 benzerlik gosteren kelimeyi kullanicinin sozrugunden "en yakin" olanla degistirir.
 FUZZY_MATCH_THRESHOLD = 0.6
 LEXICON_PATH = "data/lexicon/tr_50k.txt"  # Genel Turkce siklik sozlugu (cumle duzeltici)
+PIPER_VOICE_PATH = "data/models/tts/tr_TR-dfki-medium.onnx"  # scripts/download_piper_voice.sh indirir
 USE_LANGUAGE_MODEL = True          # KenLM aktivasyonu
 
 # --- Augmentation Ayarları ---
