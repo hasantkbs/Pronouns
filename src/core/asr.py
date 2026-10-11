@@ -225,7 +225,7 @@ class ASRSystem:
 
         return " ".join(corrected_words)
 
-    def transcribe(self, audio_path):
+    def transcribe(self, audio_path, fuzzy_correct=True):
         """
         Ses dosyasini metne donusturur ve fuzzy correction ile anlamli hale getirir.
         """
@@ -275,7 +275,9 @@ class ASRSystem:
                 return None, 0.0
 
             # --- Kelime duzeltme ve anlamli cumle kurma ---
-            text = self._fuzzy_correct(text)
+            # /translate bunu kapatir: cumle duzeltmeyi SentenceCorrector yapar
+            if fuzzy_correct:
+                text = self._fuzzy_correct(text)
 
             return text, confidence
 
