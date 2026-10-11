@@ -58,6 +58,23 @@ def test_get_asr_does_not_reuse_cached_model_across_architectures(monkeypatch):
     assert whisper.model_name == "models/FurkanV1_whisper"
 
 
+def test_get_asr_evicts_other_architecture_on_switch(monkeypatch):
+    # 12 GB GPU'da iki mimari ayni anda tutulursa CUDA OOM olur
+    _patch_asr(monkeypatch, "wav2vec2")
+    api.get_asr("FurkanV1")
+    monkeypatch.setattr(api.settings_service, "load_settings", lambda user_id: {"model": "whisper"})
+    api.get_asr("FurkanV1")
+    assert set(api.asr_systems) == {"FurkanV1_whisper"}
+
+
+def test_get_asr_keeps_other_users_models_on_switch(monkeypatch):
+    _patch_asr(monkeypatch, "wav2vec2")
+    api.get_asr("Admin")
+    monkeypatch.setattr(api.settings_service, "load_settings", lambda user_id: {"model": "whisper"})
+    api.get_asr("FurkanV1")
+    assert set(api.asr_systems) == {"Admin", "FurkanV1_whisper"}
+
+
 class _RunNow:
     def add_task(self, fn):
         fn()

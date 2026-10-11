@@ -202,6 +202,14 @@ def get_asr(user_id: str):
     settings = settings_service.load_settings(user_id)
     model_key = f"{user_id}_whisper" if settings.get("model") == "whisper" else user_id
     if model_key not in asr_systems:
+        # Mimari degistiyse eskisini bosalt: 12 GB GPU'da ikisi birden CUDA OOM yapar
+        other_key = user_id if model_key != user_id else f"{user_id}_whisper"
+        if asr_systems.pop(other_key, None) is not None:
+            import gc
+            import torch
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
         model_path = ModelService.find_personalized_model(model_key)
         # user_id son eksiz kalir: kelime haznesi data/users/{user_id}/ altindan okunur
         asr_systems[model_key] = ASRSystem(model_name=model_path, user_id=user_id)
