@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { resolveUrl, translateSpeech } from '../lib/api';
 import { startAudioCapture, type AudioCaptureHandle } from '../lib/audioCapture';
+import { playAudio, PLAYBACK_TIMEOUT_MS, startUnlessCancelled } from '../lib/deadlines';
 import { buttonEnabled, flowReducer, formatElapsed, initialFlowState, type Phase } from '../lib/furkancaFlow';
 import { ManualRecorder } from '../lib/manualRecorder';
 import { pcmToWav } from '../lib/wav';
@@ -26,8 +27,15 @@ export default function FurkancaPage() {
     captureRef.current = null;
   }, []);
 
-  // Sayfadan cikilinca mikrofon kapanir
-  useEffect(() => stopCapture, [stopCapture]);
+  // Sayfadan cikilinca mikrofon kapanir (acilmakta olan mikrofon da: bkz. startUnlessCancelled)
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      stopCapture();
+    };
+  }, [stopCapture]);
 
   const send = useCallback(async (pcm: Int16Array, sampleRate: number) => {
     try {
@@ -39,12 +47,7 @@ export default function FurkancaPage() {
       const text = result.response_text?.trim() || '(boş yanıt)';
       dispatch({ type: 'RESULT', text, hasAudio: Boolean(result.audio_url), time: new Date() });
       if (result.audio_url) {
-        const audio = new Audio(resolveUrl(result.audio_url));
-        await new Promise<void>((resolve) => {
-          audio.onended = () => resolve();
-          audio.onerror = () => resolve();
-          audio.play().catch(() => resolve());
-        });
+        await playAudio(new Audio(resolveUrl(result.audio_url)), PLAYBACK_TIMEOUT_MS);
         dispatch({ type: 'AUDIO_DONE' });
       }
     } catch (e) {
@@ -75,14 +78,19 @@ export default function FurkancaPage() {
     setElapsedMs(0);
     setLevel(0);
     try {
-      const handle = await startAudioCapture((chunk) => {
-        const recorder = recorderRef.current;
-        if (!recorder) return;
-        const reachedMax = recorder.push(chunk);
-        setElapsedMs(recorder.durationMs);
-        setLevel(recorder.level);
-        if (reachedMax) finishRecording();
-      });
+      const handle = await startUnlessCancelled(
+        () =>
+          startAudioCapture((chunk) => {
+            const recorder = recorderRef.current;
+            if (!recorder) return;
+            const reachedMax = recorder.push(chunk);
+            setElapsedMs(recorder.durationMs);
+            setLevel(recorder.level);
+            if (reachedMax) finishRecording();
+          }),
+        () => mountedRef.current,
+      );
+      if (!handle) return;
       captureRef.current = handle;
       recorderRef.current = new ManualRecorder(handle.sampleRate);
       // Dugme ancak mikrofon gercekten acildiktan sonra "Bitir" olur: ilk hece kacmaz

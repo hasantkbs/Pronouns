@@ -1,3 +1,5 @@
+import { fetchWithTimeout, TRANSLATE_TIMEOUT_MS } from './deadlines';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const API_KEY = import.meta.env.VITE_API_KEY;
 const USER_ID = 'FurkanV1';
@@ -153,11 +155,12 @@ export async function translateSpeech(audioBlob: Blob): Promise<TranslateRespons
   const form = new FormData();
   form.append('user_id', USER_ID);
   form.append('audio', audioBlob, 'live.wav');
-  const res = await fetch(`${API_BASE_URL}/translate`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: form,
-  });
+  // Sunucu takilirsa Furkanca dugmesi kilitli kalmasin
+  const res = await fetchWithTimeout(
+    `${API_BASE_URL}/translate`,
+    { method: 'POST', headers: authHeaders(), body: form },
+    TRANSLATE_TIMEOUT_MS,
+  );
   const body = await res.text();
   if (!res.ok) throw new Error(`Sunucu hatası (${res.status}): ${body}`);
   const data = JSON.parse(body) as TranslateResponse;
