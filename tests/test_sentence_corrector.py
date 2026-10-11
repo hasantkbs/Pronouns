@@ -127,3 +127,53 @@ def test_missing_lexicon_disables_word_correction(tmp_path):
 def test_real_lexicon_regressions(sentence, expected):
     corrector = SentenceCorrector(["okul", "geldi", "istiyor", "yakın", "arkadaş", "kampanya"], REAL_LEXICON)
     assert corrector.correct(sentence) == expected
+
+
+# --- Son inceleme bulgulari: anlami degistiren duzeltmeler ---
+
+def test_negation_is_never_added(tmp_path):
+    path = tmp_path / "lexicon.txt"
+    path.write_text("kaşınmıyor 100\n", encoding="utf-8")
+    # "kaşınıyor" -> "kaşınmıyor" tek harf ekleme olsa da olumsuzluk ekler
+    assert SentenceCorrector([], path).correct("kaşınıyor") == "Kaşınıyor."
+
+
+def test_substitution_is_never_applied(tmp_path):
+    path = tmp_path / "lexicon.txt"
+    path.write_text("ilacını 100\n", encoding="utf-8")
+    # "ilacımı" -> "ilacını" tek harf degistirme; "benim" -> "senin" olur
+    assert SentenceCorrector([], path).correct("ilacımı") == "İlacımı."
+
+
+def test_capitalised_word_mid_sentence_is_kept(lexicon):
+    assert _corrector(lexicon).correct("dün Ahmet geldim") == "Dün Ahmet geldim."
+
+
+@pytest.mark.parametrize("sentence, expected", [
+    ("3,5 kilo", "3,5 kilo."),
+    ("saat 14:30", "Saat 14:30."),
+    ("%50 bir", "%50 bir."),
+    ("bir 3.", "Bir 3."),
+])
+def test_numbers_keep_their_punctuation(lexicon, sentence, expected):
+    assert _corrector(lexicon).correct(sentence) == expected
+
+
+@pytest.mark.skipif(not REAL_LEXICON.exists(), reason="data/lexicon/tr_50k.txt yok")
+@pytest.mark.parametrize("sentence, expected", [
+    ("ağrımıyor", "Ağrımıyor."),
+    ("kaşınmıyor", "Kaşınmıyor."),
+    ("üşümüyorum", "Üşümüyorum."),
+    ("susamadım", "Susamadım."),
+    ("acıkmadım", "Acıkmadım."),
+    ("ilacımı almadım", "İlacımı almadım."),
+    ("yorulmadım", "Yorulmadım."),
+    ("ben Furkan", "Ben Furkan."),
+    ("Furkan geldi", "Furkan geldi."),
+    ("Bursa güzel", "Bursa güzel."),
+    ("Antalya", "Antalya."),
+    ("Emine geldi", "Emine geldi."),
+])
+def test_real_lexicon_never_changes_meaning(sentence, expected):
+    corrector = SentenceCorrector(["okul", "geldi", "istiyor", "kampanya", "yardım"], REAL_LEXICON)
+    assert corrector.correct(sentence) == expected

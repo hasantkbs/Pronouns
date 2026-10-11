@@ -12,8 +12,6 @@ import string
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
-from Levenshtein import distance as lev_dist
-
 import config
 from src.utils.utils import normalize_turkish_text
 
@@ -32,6 +30,9 @@ _QUESTION_WORDS = {
     "nasıl", "neden", "niye", "niçin", "hangi", "kaç",
 }
 
+# Olumsuzluk eki adayi: "gelmiyor", "almadım", "kaşınmıyor"
+_NEGATION = re.compile(r"m[aeıiouöü]")
+
 # Kesme isareti disindaki noktalama: "İstanbul'a," -> "İstanbul'a"
 _STRIP_CHARS = string.punctuation.replace("'", "") + "“”"
 
@@ -45,6 +46,11 @@ def _read_lexicon(lexicon_path: Path) -> List[Tuple[str, int]]:
             if len(parts) >= 2:
                 rows.append((parts[0], int(parts[1])))
     return rows
+
+
+def _is_subsequence(word: str, other: str) -> bool:
+    remaining = iter(other)
+    return all(ch in remaining for ch in word)
 
 
 def _turkish_capitalize(text: str) -> str:
@@ -94,9 +100,19 @@ class SentenceCorrector:
             return ""
 
         words = []
-        for raw_token in raw_text.replace("’", "'").split():
-            if "'" in raw_token:
-                # Ozel isim + ek ("İstanbul'a"): oldugu gibi korunur
+        raw_tokens = raw_text.replace("’", "'").split()
+        for i, raw_token in enumerate(raw_tokens):
+            if any(ch.isdigit() for ch in raw_token):
+                # Sayi ("3,5", "14:30", "%50"): ic noktalama degeri tasir, korunur;
+                # yalnizca cumle sonundaki noktalama atilir.
+                token = raw_token.strip("\"“”()")
+                if i == len(raw_tokens) - 1:
+                    token = token.rstrip(".,!?;:")
+                if token:
+                    words.append(token)
+                continue
+            if "'" in raw_token or (i > 0 and raw_token[:1].isupper()):
+                # Ozel isim ("İstanbul'a", cumle ortasinda "Ahmet"): oldugu gibi korunur
                 token = raw_token.strip(_STRIP_CHARS)
                 if token.strip("'"):
                     words.append(token)
@@ -119,7 +135,9 @@ class SentenceCorrector:
 
         limit = (1 - config.FUZZY_MATCH_THRESHOLD) * len(word) + 1e-9
         from_user = self._best(word, self.user_words, limit)
-        from_lexicon = self._best(word, self.candidates, limit)
+        # Genel sozlukte en fazla 1 harf eklenir: 2 harf "üşümüyorum" -> "düşünmüyorum",
+        # "bursa" -> "bulursa" yapiyordu. Furkan'in kendi kelimelerinde esik aynen kalir.
+        from_lexicon = self._best(word, self.candidates, min(limit, 1))
 
         if from_user and (from_lexicon is None or from_user[0] <= from_lexicon[0]):
             return from_user[2]
@@ -128,13 +146,22 @@ class SentenceCorrector:
         return word
 
     def _best(self, word: str, words: List[str], limit: float):
-        """Esik icindeki en iyi aday: (mesafe, siklik_sirasi, kelime) ya da None."""
+        """
+        Esik icindeki en iyi aday: (mesafe, siklik_sirasi, kelime) ya da None.
+
+        Yalnizca harf EKLEYEN duzeltmeler kabul edilir (kelime adayin alt dizisi):
+        "gldim" -> "geldim". Harf degistirme/silme, sozlukte olmayan gecerli
+        kelimelerin anlamini ceviriyordu ("ilacımı" -> "ilacını",
+        "kaşınmıyor" -> "kaşınıyor"). Olumsuzluk eki ekleyen/silen aday da reddedilir.
+        """
         best = None
+        negations = len(_NEGATION.findall(word))
         for other in words:
-            if abs(len(other) - len(word)) > limit:
+            d = len(other) - len(word)
+            # Basa harf eklemek baska kelime uretir ("emine" -> "zemine")
+            if d <= 0 or d > limit or other[0] != word[0]:
                 continue
-            d = lev_dist(word, other)
-            if d > limit:
+            if not _is_subsequence(word, other) or len(_NEGATION.findall(other)) != negations:
                 continue
             key = (d, self.rank.get(other, len(self.rank)), other)
             if best is None or key < best:
