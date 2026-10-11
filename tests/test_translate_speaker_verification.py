@@ -14,7 +14,9 @@ _AUTH = {"X-API-Key": config.API_SECRET_KEY}
 
 
 class _FakeAsr:
-    def transcribe(self, path):
+    user_vocabulary = []
+
+    def transcribe(self, path, fuzzy_correct=True):
         return None, 0.0
 
 
@@ -94,3 +96,84 @@ def test_voice_profile_status_endpoint(monkeypatch):
         "sample_count": 5,
         "created_at": "2026-08-10T00:00:00",
     }
+
+
+class _FakeTextAsr:
+    user_vocabulary = ["okul"]
+
+    def __init__(self, text="ben okla gldim"):
+        self.text = text
+        self.fuzzy_flags = []
+
+    def transcribe(self, path, fuzzy_correct=True):
+        self.fuzzy_flags.append(fuzzy_correct)
+        return self.text, 0.85
+
+
+class _FakeCorrector:
+    def __init__(self, result="Ben okula geldim."):
+        self.result = result
+        self.inputs = []
+
+    def correct(self, text):
+        self.inputs.append(text)
+        return self.result
+
+
+class _FakeTts:
+    def __init__(self, ok=True):
+        self.ok = ok
+        self.texts = []
+
+    def synthesize(self, text, output_path):
+        self.texts.append(text)
+        return output_path if self.ok else None
+
+
+def _post_translate():
+    return client.post(
+        "/translate",
+        data={"user_id": "FurkanV1"},
+        files={"audio": _fake_audio_file()},
+        headers=_AUTH,
+    )
+
+
+def _patch_pipeline(monkeypatch, asr, corrector, tts):
+    monkeypatch.setattr(config, "SPEAKER_VERIFY_ENABLED", False)
+    monkeypatch.setattr(api, "get_asr", lambda user_id: asr)
+    monkeypatch.setattr(api, "get_corrector", lambda user_id, vocabulary: corrector)
+    monkeypatch.setattr(api, "tts", tts)
+
+
+def test_translate_returns_corrected_sentence(monkeypatch):
+    asr, corrector, tts = _FakeTextAsr(), _FakeCorrector(), _FakeTts()
+    _patch_pipeline(monkeypatch, asr, corrector, tts)
+
+    body = _post_translate().json()
+
+    assert body["recognized_text"] == "ben okla gldim"
+    assert body["response_text"] == "Ben okula geldim."
+    assert body["intent"] == "translate"
+    assert body["missing_words"] == []
+    assert body["audio_url"].startswith("/download/")
+    assert asr.fuzzy_flags == [False]
+    assert corrector.inputs == ["ben okla gldim"]
+    assert tts.texts == ["Ben okula geldim."]
+
+
+def test_translate_without_audio_when_tts_fails(monkeypatch):
+    _patch_pipeline(monkeypatch, _FakeTextAsr(), _FakeCorrector(), _FakeTts(ok=False))
+
+    body = _post_translate().json()
+
+    assert body["response_text"] == "Ben okula geldim."
+    assert body["audio_url"] is None
+
+
+def test_translate_empty_correction_is_not_understood(monkeypatch):
+    tts = _FakeTts()
+    _patch_pipeline(monkeypatch, _FakeTextAsr(text="..."), _FakeCorrector(result=""), tts)
+
+    assert _post_translate().json() == {"error": "Konuşma anlaşılamadı."}
+    assert tts.texts == []

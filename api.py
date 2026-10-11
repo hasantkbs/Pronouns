@@ -15,9 +15,8 @@ import csv
 import config
 from src.constants import RECORD_TYPE_WORD, DATASET_DIRS, METADATA_FILENAMES
 from src.core.asr import ASRSystem
-from src.core.synthesizer import WordSynthesizer
-from src.core.nlu import NLU_System
-from src.core.actions import run_action
+from src.core.sentence_corrector import SentenceCorrector
+from src.core.tts import PiperTTS
 from src.services.model_service import ModelService
 from src.services.settings_service import SettingsService
 from src.services.training_service import TrainingService
@@ -70,7 +69,8 @@ async def require_api_key(request: Request, call_next):
 
 # Global sistemler (Lazy loading için None)
 asr_systems = {}  # user_id -> ASRSystem
-nlu = NLU_System()
+correctors: Dict[str, SentenceCorrector] = {}  # user_id -> SentenceCorrector
+tts = PiperTTS(Path(config.PIPER_VOICE_PATH))  # CPU, API acilisinda bir kez
 training_services = {} # user_id -> TrainingService
 
 def _metadata_words_path(user_id: str) -> Path:
@@ -214,6 +214,11 @@ def get_asr(user_id: str):
         # user_id son eksiz kalir: kelime haznesi data/users/{user_id}/ altindan okunur
         asr_systems[model_key] = ASRSystem(model_name=model_path, user_id=user_id)
     return asr_systems[model_key]
+
+def get_corrector(user_id: str, vocabulary: List[str]) -> SentenceCorrector:
+    if user_id not in correctors:
+        correctors[user_id] = SentenceCorrector(vocabulary, Path(config.LEXICON_PATH))
+    return correctors[user_id]
 
 def get_training_service(user_id: str):
     if user_id not in training_services:
@@ -382,30 +387,28 @@ async def translate_speech(user_id: str = Form(...), audio: UploadFile = File(..
             os.remove(temp_input)
             return {"rejected": True, "reason": "speaker_mismatch"}
 
-    # ASR
+    # ASR (ham metin: cumle duzeltmeyi SentenceCorrector yapar)
     asr = get_asr(user_id)
-    text, confidence = asr.transcribe(temp_input)
+    text, confidence = asr.transcribe(temp_input, fuzzy_correct=False)
     os.remove(temp_input)
-    
+
     if not text:
         return {"error": "Konuşma anlaşılamadı."}
-    
-    # NLU & Action
-    intent, entities = nlu.process_text(text)
-    action_response = run_action(intent, entities)
-    
-    # Synthesis
-    synth = WordSynthesizer(user_id=user_id)
-    out_filename = f"{uuid.uuid4()}.wav"
-    out_path = str(_TTS_OUTPUT_DIR / out_filename)
-    out_path, missing = synth.synthesize_sentence(action_response, output_path=out_path)
-    
+
+    # Tercuman: Furkan'in cumlesinin duzeltilmis hali
+    corrected = get_corrector(user_id, asr.user_vocabulary).correct(text)
+    if not corrected:
+        return {"error": "Konuşma anlaşılamadı."}
+
+    # Yerel TTS (Piper); basarisizsa metin yine doner
+    out_path = tts.synthesize(corrected, str(_TTS_OUTPUT_DIR / f"{uuid.uuid4()}.wav"))
+
     return {
         "recognized_text": text,
-        "intent": intent,
-        "response_text": action_response,
+        "intent": "translate",
+        "response_text": corrected,
         "audio_url": f"/download/{os.path.basename(out_path)}" if out_path else None,
-        "missing_words": missing
+        "missing_words": [],
     }
 
 @app.post("/voice-profile/rebuild")
