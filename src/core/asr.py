@@ -239,7 +239,9 @@ class ASRSystem:
                 input_features = self.processor(speech, sampling_rate=sr, return_tensors="pt").input_features.to(self.device)
 
                 generate_kwargs = {"language": "tr", "task": "transcribe"}
-                if self.user_vocabulary:
+                # Varsayilan kapali: ipucusuz egitilen LoRA modelinde 80 eval kaydinda
+                # dogrulugu %74'ten %55'e dusurdu ve bos cikti uretti (2026-10-11).
+                if self.user_vocabulary and getattr(config, "WHISPER_PROMPT_BIASING", False):
                     # Whisper'in resmi hotword/context-biasing yontemi: kullanicinin
                     # bildigi kelimeleri decoder'a "onceki baglam" gibi veriyoruz.
                     # 50 kelime sinirlamasi Whisper'in decoder context budgetini asmamak icin.
