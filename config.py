@@ -79,6 +79,7 @@ GRADIENT_ACCUMULATION_STEPS = 4    # Toplam batch size 32 (8 * 4) korunuyor
 # Kelime tamamlama ve duzeltme esigi (0-1)
 # 0.6: %60 benzerlik gosteren kelimeyi kullanicinin sozrugunden "en yakin" olanla degistirir.
 FUZZY_MATCH_THRESHOLD = 0.6
+LEXICON_PATH = "data/lexicon/tr_50k.txt"  # Genel Turkce siklik sozlugu (cumle duzeltici)
 USE_LANGUAGE_MODEL = True          # KenLM aktivasyonu
 
 # --- Augmentation Ayarları ---
