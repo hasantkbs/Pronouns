@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { resolveUrl, translateSpeech } from '../lib/api';
 import { startAudioCapture, type AudioCaptureHandle } from '../lib/audioCapture';
-import { VadSegmenter, pcmToWav } from '../lib/vad';
+import { VadSegmenter } from '../lib/vad';
+import { pcmToWav } from '../lib/wav';
 
 type ListenState = 'idle' | 'listening' | 'capturing' | 'uploading' | 'speaking' | 'error' | 'paused';
 

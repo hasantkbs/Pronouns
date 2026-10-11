@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getNextWord, getProgress, getWordSets } from '../lib/api';
 import { startAudioCapture } from '../lib/audioCapture';
-import { pcmToWav } from '../lib/vad';
+import { pcmToWav } from '../lib/wav';
 import { addTake, getAllTakes, getPendingWords, getTakesForWord } from '../lib/pendingRecordingsStore';
 
 export default function KayitPage() {
