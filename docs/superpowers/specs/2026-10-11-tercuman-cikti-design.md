@@ -78,9 +78,18 @@ göre azalan; repoya eklenir (~700 KB, bir kez indirilir, statik).
 2. Her kelime `w` için:
    - `w ∈ known` → olduğu gibi.
    - `len(w) ≤ 2` → olduğu gibi (kısa kelimede en yakın eşleşme rastgeledir).
-   - Aksi halde Levenshtein mesafesiyle en iyi aday aranır, eşik
-     `mesafe ≤ (1 - config.FUZZY_MATCH_THRESHOLD) × len(w)` (bugünkü 0.6 →
-     %40, mevcut davranışla aynı oran):
+   - Rakam içeren kelime (`3,5`, `14:30`, `%50`) olduğu gibi korunur; yalnızca
+     cümle sonundaki noktalama atılır. Cümle ortasında büyük harfle başlayan
+     kelime (`Ahmet`) özel isim sayılır, olduğu gibi korunur.
+   - Aksi halde **yalnızca harf ekleyen** bir aday aranır (*son inceleme
+     sonrası daraltıldı*: harf değiştirme/silme, sözlükte olmayan geçerli
+     kelimelerin anlamını çeviriyordu — `ağrımıyor→ağrıtıyor`,
+     `ilacımı→ilacını`, `Furkan→kurban`). Aday geçerli sayılmak için:
+     `w` adayın alt dizisi olmalı, ilk harfler aynı olmalı
+     (`emine→zemine` olmaz), olumsuzluk eki sayısı (`m[aeıiouöü]`) değişmemeli
+     (`kaşınıyor→kaşınmıyor` olmaz). Mesafe = eklenen harf sayısı; eşik
+     Furkan sözlüğü için `≤ (1 - config.FUZZY_MATCH_THRESHOLD) × len(w)`,
+     genel liste için **en fazla 1 harf** (`üşümüyorum→düşünmüyorum` olmaz):
      - `f` = Furkan sözlüğündeki en iyi aday, `g` = aday listesindeki en iyi
        aday. Eşit mesafede **daha sık** kelime kazanır (liste sırası; Furkan
        sözlüğünde eşitlikte genel listedeki sırası, yoksa alfabetik).
@@ -102,8 +111,11 @@ korunur.
 **Bilinen sınırlar** (yaklaşımın doğası, kabul edildi):
 
 - ASR yanlış ama geçerli bir kelime duyarsa (`sevdi` → `sevgi`) düzeltilemez.
-- Eşit mesafede sıklık kazanır: `gdiyorum → ediyorum` (kastedilen
-  "gidiyorum"), `istiyom → istiyor`.
+- Yalnızca harf ekleyen düzeltme yapıldığı için harf *değiştirilmiş* bozuk
+  çıktılar düzeltilmez (`istiyom`, `geliyom`, `sinemya` olduğu gibi kalır) —
+  anlam değiştirmekten güvenli.
+- Eşit mesafede sıklık kazanır (ilk harf kuralından sonra `gdiyorum →
+  gidiyorum` doğru düzelir; `bulv` ise artık düzeltilmez).
 - ASR ASCII yazım üretirse (`aldim`) tanıma kümesinde olduğu için düzeltilmez
   (Whisper normalde Türkçe karakterli yazar).
 
