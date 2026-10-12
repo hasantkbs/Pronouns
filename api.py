@@ -11,6 +11,7 @@ import shutil
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Set
 import csv
+import hashlib
 
 import config
 from src.constants import RECORD_TYPE_WORD, RECORD_TYPE_SENTENCE, DATASET_DIRS, METADATA_FILENAMES
@@ -195,6 +196,14 @@ def _read_set_file(set_file: str, record_type: str = RECORD_TYPE_WORD) -> List[s
     return lines
 
 
+def _find_sentence_set(sentence: str) -> Optional[str]:
+    """Cümlenin geçtiği ölçüm setinin dosya adı; hiçbirinde yoksa None."""
+    for path in sorted(_dataset_dir(RECORD_TYPE_SENTENCE).glob(f"{_SENTENCE_SET_PREFIX}*.txt")):
+        if sentence in _read_set_file(path.name, RECORD_TYPE_SENTENCE):
+            return path.name
+    return None
+
+
 def _get_next_word_and_rep(
     user_id: str,
     set_file: str,
@@ -303,14 +312,26 @@ async def upload_record(
     user_id: str = Form(...), 
     word: str = Form(...), 
     audio: UploadFile = File(...),
-    background_tasks: BackgroundTasks = None
+    background_tasks: BackgroundTasks = None,
+    kind: str = Form("word"),
 ):
     """Mobil uygulamadan gelen ses kaydını saklar ve metadata günceller."""
-    user_dir = repo.get_save_path(user_id, RECORD_TYPE_WORD) / word
+    record_type = _record_type(kind)
+    set_file = None
+    if record_type == RECORD_TYPE_SENTENCE:
+        # Ölçüm yalnızca bilinen cümlelerle anlamlı; set_file gruplama için metadata'ya yazılır
+        set_file = _find_sentence_set(word)
+        if set_file is None:
+            raise HTTPException(status_code=400, detail="Cümle hiçbir ölçüm setinde yok.")
+        # Cümle klasör adı olamaz (noktalama, uzunluk): metnin özeti kullanılır
+        item_dir = f"s_{hashlib.sha1(word.encode('utf-8')).hexdigest()[:10]}"
+    else:
+        item_dir = word
+    user_dir = repo.get_save_path(user_id, record_type) / item_dir
     user_dir.mkdir(parents=True, exist_ok=True)
     
     # Kaçıncı tekrar olduğunu bul
-    current_count = repo.get_recorded_count(user_id, RECORD_TYPE_WORD, word)
+    current_count = repo.get_recorded_count(user_id, record_type, word)
     rep = current_count + 1
     
     file_path = user_dir / f"rep{rep}.wav"
@@ -321,7 +342,13 @@ async def upload_record(
     quality_info = calculate_audio_quality(str(file_path))
     
     # Metadata kaydet
-    relative_path = normalize_path_for_cross_platform(str(file_path.absolute()), repo.get_user_path(user_id))
+    if record_type == RECORD_TYPE_SENTENCE:
+        # Kullanıcı dizinine göre göreli yol (audio/s_<özet>/repN.wav): ölçüm betiği taşınabilir okur
+        relative_path = normalize_path_for_cross_platform(
+            str(file_path.absolute()), repo.get_user_path(user_id).absolute()
+        )
+    else:
+        relative_path = normalize_path_for_cross_platform(str(file_path.absolute()), repo.get_user_path(user_id))
     
     metadata_entry = {
         "file_path": relative_path,
@@ -332,12 +359,15 @@ async def upload_record(
         "snr_db": quality_info['snr_db'],
         "duration": quality_info['duration']
     }
+    if set_file is not None:
+        metadata_entry["set_file"] = set_file
     
-    repo.save_metadata(user_id, RECORD_TYPE_WORD, [metadata_entry], append=True)
+    repo.save_metadata(user_id, record_type, [metadata_entry], append=True)
     
-    # Self-learning: yeterli yeni kayıt varsa arka planda fine-tune başlat
+    # Self-learning: yeterli yeni kayıt varsa arka planda fine-tune başlat.
+    # Cümle kayıtları yalnızca ölçüm içindir, eğitimi tetiklemez.
     settings = settings_service.load_settings(user_id)
-    if settings.get("self_learning", True):
+    if record_type == RECORD_TYPE_WORD and settings.get("self_learning", True):
         details = _get_recorded_details_words(user_id)
         total_samples = sum(details.values())
         ideal = int(config.IDEAL_REPETITIONS)
