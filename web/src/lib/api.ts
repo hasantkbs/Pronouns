@@ -188,6 +188,16 @@ export async function translateSpeech(audioBlob: Blob): Promise<TranslateRespons
   return data;
 }
 
+const APK_VERSION_TIMEOUT_MS = 10000;
+
+/** Sunucudaki APK'nın sürüm numarası (versionCode); yoksa 0. */
+export async function getServerApkVersion(): Promise<number> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/apk/version`, {}, APK_VERSION_TIMEOUT_MS);
+  if (!res.ok) throw new Error(`Sürüm alınamadı: ${res.status}`);
+  const data = (await res.json()) as { versionCode?: number };
+  return Number(data.versionCode ?? 0);
+}
+
 export function resolveUrl(pathOrUrl: string): string {
   return pathOrUrl.startsWith('http') ? pathOrUrl : `${API_BASE_URL}${pathOrUrl}`;
 }

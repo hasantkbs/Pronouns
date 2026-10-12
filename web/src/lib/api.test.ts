@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getNextWord, getProgress, getWordSets, uploadRecording } from './api';
+import { getNextWord, getProgress, getServerApkVersion, getWordSets, uploadRecording } from './api';
 
 function stubFetch(body: unknown) {
   const fetchMock = vi.fn(
@@ -70,5 +70,18 @@ describe('kayıt türü (kind)', () => {
     const fetchMock = stubFetch({});
     await uploadRecording('elma', new Blob([new Uint8Array([1])]));
     expect(sentForm(fetchMock).get('kind')).toBe('word');
+  });
+});
+
+describe('getServerApkVersion', () => {
+  it('returns the server build number', async () => {
+    const fetchMock = stubFetch({ versionCode: 3, versionName: '1.2' });
+    expect(await getServerApkVersion()).toBe(3);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/apk/version');
+  });
+
+  it('fails on a server error', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('x', { status: 500 })));
+    await expect(getServerApkVersion()).rejects.toThrow('500');
   });
 });
