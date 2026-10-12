@@ -54,7 +54,11 @@ haliyle. Mevcut `sentence_set_*.txt` dosyalarına dokunulmaz.
 
 - `metadata.csv` satırı kelime satırıyla aynı alanlar + **`set_file`**:
   `file_path, transcription, repetition, quality_score, rms, snr_db, duration, set_file`.
-  `transcription` cümlenin dosyadaki hali.
+  `transcription` cümlenin dosyadaki hali; `file_path` kullanıcı dizinine göre
+  göreli (`audio/s_<özet>/repN.wav`).
+- `set_file`'ı **sunucu bulur** (cümlenin geçtiği `olcum_*.txt`); istemci ve
+  bekleyen kayıt kuyruğu set bilgisi taşımaz. Hiçbir ölçüm setinde olmayan
+  cümle → **400** (kayıt yazılmaz).
 - Cümle yüklemesi **self-learning eğitimini tetiklemez** (bugün `/record`
   kelime sayısı `IDEAL_REPETITIONS`'ın katı olunca eğitim başlatıyor; bu
   yalnızca `kind=word` için kalır).
@@ -75,7 +79,9 @@ haliyle. Mevcut `sentence_set_*.txt` dosyalarına dokunulmaz.
     gönderilmez → "Çok kısa, tekrar dene"; 30 sn'de otomatik biter).
     Kelime modundaki saniye ayarı bu modda gizlenir.
   - Kayıttan sonra dinleme yok (kelime modunda da yok).
-  - "Atla" bugünkü gibi çalışır.
+  - **"Atla"** (yeni; kelime modunda yok): okunamayan cümle bu oturumda geçilir.
+    İstemci tarafıdır: atlanan cümle `exclude`'a eklenir; mod ya da set
+    değişince sıfırlanır. Atlanan cümle ölçüme girmez.
 - **Çevrimdışı kuyruk:** `PendingTake`'e `kind?: 'word' | 'sentence'`;
   alanı olmayan eski kayıtlar `'word'` sayılır. IndexedDB sürümü değişmez
   (yeni index yok). `addTake(word, blob, kind)`; bekleyenler türe göre
@@ -119,6 +125,7 @@ yalnızca sözlük dışı cümlelerdeyse → kelime toplamaya devam.
 | Durum | Davranış |
 |---|---|
 | Geçersiz `kind` | 400 |
+| Ölçüm setlerinde olmayan cümle yüklemesi | 400, kayıt yazılmaz |
 | `kind` yok | `word` (bugünkü davranış) |
 | Set dosyası yok / `olcum_` değil (`kind=sentence`) | 404 |
 | Setteki tüm cümleler tamam | `next-word` `done: true` (kelime yoluyla aynı biçim) |
