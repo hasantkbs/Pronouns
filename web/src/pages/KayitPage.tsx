@@ -5,6 +5,7 @@ import { startAudioCapture, type AudioCaptureHandle } from '../lib/audioCapture'
 import { startUnlessCancelled } from '../lib/deadlines';
 import { formatElapsed } from '../lib/furkancaFlow';
 import { ManualRecorder } from '../lib/manualRecorder';
+import { RequestGate } from '../lib/requestGate';
 import { pcmToWav } from '../lib/wav';
 import { addTake, getAllTakes, getPendingWords, getTakesForWord } from '../lib/pendingRecordingsStore';
 
@@ -31,9 +32,14 @@ export default function KayitPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [wordPendingCount, setWordPendingCount] = useState(0);
+  const [wordLoading, setWordLoading] = useState(false);
 
-  // Mod/set degisince onceki istegin gec gelen yaniti yeni modun metnini ezmesin
-  const wordRequestRef = useRef(0);
+  // Mod/set degisince onceki isteklerin gec gelen yaniti yeni modu ezmesin
+  const setsGate = useRef(new RequestGate());
+  const wordGate = useRef(new RequestGate());
+  const progressGate = useRef(new RequestGate());
+  // Kayit hangi cumleyle basladiysa o cumleye yazilir
+  const takeTextRef = useRef<string | null>(null);
   const captureRef = useRef<AudioCaptureHandle | null>(null);
   const recorderRef = useRef<ManualRecorder | null>(null);
 
@@ -52,41 +58,58 @@ export default function KayitPage() {
   const busy = recording || sentencePhase !== 'idle';
 
   const loadSets = useCallback(async () => {
+    const gate = setsGate.current;
+    const token = gate.begin();
     try {
       const { sets: s } = await getWordSets(kind);
+      if (!gate.isCurrent(token)) return;
       setSets(s);
       setSetFile((current) => (s.length > 0 && !s.includes(current) ? s[0] : current));
     } catch {
       // set listesi opsiyonel; varsayılan setFile ile devam edilir
+    } finally {
+      gate.finish(token);
     }
   }, [kind]);
 
   const refreshWord = useCallback(async () => {
     if (!setFile) return; // cümle setleri henüz yüklenmedi
-    const requestId = ++wordRequestRef.current;
+    const gate = wordGate.current;
+    const token = gate.begin();
+    // Sıradaki metin gelene kadar kayıt başlatılamaz: ekrandaki eski metne kayıt yapılmasın
+    setWordLoading(true);
     try {
       const pending = Array.from(await getPendingWords(kind));
       const data = await getNextWord(setFile, [...pending, ...skipped], kind);
-      if (requestId !== wordRequestRef.current) return;
+      if (!gate.isCurrent(token)) return;
       setWord(data.word ?? null);
       setDone(data.done === true);
       setCurrentCount(data.current_count ?? 0);
       setIdealReps(data.ideal_repetitions ?? 0);
       setTotalWords((prev) => data.total_words ?? prev);
     } catch (e) {
+      if (!gate.isCurrent(token)) return;
       setStatus(`${kind === 'word' ? 'Kelime' : 'Cümle'} alınamadı: ${(e as Error).message}`);
+    } finally {
+      gate.finish(token);
+      setWordLoading(gate.pending);
     }
   }, [setFile, kind, skipped]);
 
   const refreshProgress = useCallback(async () => {
     if (!setFile) return;
+    const gate = progressGate.current;
+    const token = gate.begin();
     try {
       const data = await getProgress(setFile, kind);
+      if (!gate.isCurrent(token)) return;
       setCompletedWords(data.completed_words ?? 0);
       setTotalWords((prev) => data.total_words ?? prev);
       setIdealReps((prev) => data.ideal_repetitions ?? prev);
     } catch {
       // ilerleme opsiyonel
+    } finally {
+      gate.finish(token);
     }
   }, [setFile, kind]);
 
@@ -116,7 +139,10 @@ export default function KayitPage() {
 
   function changeKind(next: RecordKind) {
     if (next === kind || busy) return;
-    wordRequestRef.current++;
+    setsGate.current.invalidate();
+    wordGate.current.invalidate();
+    progressGate.current.invalidate();
+    setWordLoading(false);
     setKind(next);
     // Cümle setleri sunucudan gelince ilki seçilir
     setSetFile(next === 'word' ? DEFAULT_WORD_SET : '');
@@ -172,10 +198,12 @@ export default function KayitPage() {
   const finishSentence = useCallback(async () => {
     const recorder = recorderRef.current;
     const capture = captureRef.current;
+    const text = takeTextRef.current;
     // Ikinci cagri (dugme + 30 sn siniri ayni anda) yok sayilir
-    if (!recorder || !capture || !word) return;
+    if (!recorder || !capture || !text) return;
     recorderRef.current = null;
     captureRef.current = null;
+    takeTextRef.current = null;
     capture.stop();
     setSentencePhase('idle');
 
@@ -185,16 +213,17 @@ export default function KayitPage() {
       return;
     }
     try {
-      await addTake(word, pcmToWav(result.pcm, capture.sampleRate, 1), 'sentence');
+      await addTake(text, pcmToWav(result.pcm, capture.sampleRate, 1), 'sentence');
       await refreshPendingCounts();
       setStatus('Cihazda kaydedildi');
     } catch (e) {
       setStatus(`Hata: ${(e as Error).message}`);
     }
-  }, [word, refreshPendingCounts]);
+  }, [refreshPendingCounts]);
 
   async function startSentence() {
-    if (sentencePhase !== 'idle' || !word) return;
+    if (sentencePhase !== 'idle' || !word || wordLoading) return;
+    takeTextRef.current = word;
     setSentencePhase('starting');
     setStatus(null);
     setElapsedMs(0);
@@ -216,13 +245,14 @@ export default function KayitPage() {
       // Dugme ancak mikrofon gercekten acildiktan sonra "Bitir" olur: ilk hece kacmaz
       setSentencePhase('recording');
     } catch (e) {
+      takeTextRef.current = null;
       setSentencePhase('idle');
       setStatus(`Mikrofon açılamadı: ${(e as Error).message}`);
     }
   }
 
   function skipSentence() {
-    if (!word || busy) return;
+    if (!word || busy || wordLoading) return;
     setStatus(null);
     setSkipped((prev) => [...prev, word]);
   }
@@ -323,7 +353,9 @@ export default function KayitPage() {
 
           <button
             type="button"
-            disabled={sentencePhase === 'starting' || (sentencePhase === 'idle' && wordFull)}
+            disabled={
+              sentencePhase === 'starting' || (sentencePhase === 'idle' && (wordFull || wordLoading))
+            }
             onClick={() =>
               sentencePhase === 'recording' ? void finishSentence() : void startSentence()
             }
@@ -347,7 +379,7 @@ export default function KayitPage() {
               Sıradaki Cümle
             </button>
           ) : (
-            <button type="button" disabled={busy} onClick={skipSentence}>
+            <button type="button" disabled={busy || wordLoading} onClick={skipSentence}>
               Atla
             </button>
           )}
