@@ -76,12 +76,18 @@ export async function rebuildVoiceProfile(): Promise<{ sample_count: number }> {
   return res.json();
 }
 
+/** Kayıt sayfasının modu: kelime (eğitim verisi) ya da cümle (ölçüm). */
+export type RecordKind = 'word' | 'sentence';
+
 export interface WordSetsResponse {
   sets: string[];
 }
 
-export async function getWordSets(): Promise<WordSetsResponse> {
-  const res = await fetch(`${API_BASE_URL}/collect/word-sets`, { headers: authHeaders() });
+export async function getWordSets(kind: RecordKind = 'word'): Promise<WordSetsResponse> {
+  const params = new URLSearchParams({ kind });
+  const res = await fetch(`${API_BASE_URL}/collect/word-sets?${params.toString()}`, {
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error(`Kelime setleri alınamadı: ${res.status}`);
   return res.json();
 }
@@ -97,11 +103,17 @@ export interface NextWordResponse {
   error?: string;
 }
 
-export async function getNextWord(setFile: string, exclude: string[]): Promise<NextWordResponse> {
+export async function getNextWord(
+  setFile: string,
+  exclude: string[],
+  kind: RecordKind = 'word',
+): Promise<NextWordResponse> {
   const params = new URLSearchParams({
     user_id: USER_ID,
     set_file: setFile,
-    exclude: exclude.join(','),
+    // Cümlelerin içinde virgül olabilir: sunucu cümleleri satır sonuyla ayırır
+    exclude: exclude.join(kind === 'sentence' ? '\n' : ','),
+    kind,
   });
   const res = await fetch(`${API_BASE_URL}/collect/next-word?${params.toString()}`, {
     headers: authHeaders(),
@@ -118,8 +130,11 @@ export interface ProgressResponse {
   ideal_repetitions: number;
 }
 
-export async function getProgress(setFile: string): Promise<ProgressResponse> {
-  const params = new URLSearchParams({ user_id: USER_ID, set_file: setFile });
+export async function getProgress(
+  setFile: string,
+  kind: RecordKind = 'word',
+): Promise<ProgressResponse> {
+  const params = new URLSearchParams({ user_id: USER_ID, set_file: setFile, kind });
   const res = await fetch(`${API_BASE_URL}/collect/progress?${params.toString()}`, {
     headers: authHeaders(),
   });
@@ -127,10 +142,15 @@ export async function getProgress(setFile: string): Promise<ProgressResponse> {
   return res.json();
 }
 
-export async function uploadRecording(word: string, audioBlob: Blob): Promise<void> {
+export async function uploadRecording(
+  word: string,
+  audioBlob: Blob,
+  kind: RecordKind = 'word',
+): Promise<void> {
   const form = new FormData();
   form.append('user_id', USER_ID);
   form.append('word', word);
+  form.append('kind', kind);
   form.append('audio', audioBlob, `${word}.wav`);
   const res = await fetch(`${API_BASE_URL}/record`, {
     method: 'POST',
