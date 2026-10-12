@@ -2,7 +2,7 @@
 import hmac
 import logging
 from datetime import datetime
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, Request
+from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, Request, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -13,7 +13,7 @@ from typing import List, Optional, Dict, Any, Set
 import csv
 
 import config
-from src.constants import RECORD_TYPE_WORD, DATASET_DIRS, METADATA_FILENAMES
+from src.constants import RECORD_TYPE_WORD, RECORD_TYPE_SENTENCE, DATASET_DIRS, METADATA_FILENAMES
 from src.core.asr import ASRSystem
 from src.core.sentence_corrector import SentenceCorrector
 from src.core.tts import PiperTTS
@@ -81,16 +81,41 @@ if not _speaker_logger.handlers:
     _speaker_logger.addHandler(_sv_handler)
 training_services = {} # user_id -> TrainingService
 
+# Kayit sayfasinin `kind` parametresi -> kayit turu. Parametre yoksa "word" (eski APK).
+_KINDS = {"word": RECORD_TYPE_WORD, "sentence": RECORD_TYPE_SENTENCE}
+# Cumle modunda yalnizca olcum setleri sunulur; sentence_set_* dosyalari rastgele kelime listeleri
+_SENTENCE_SET_PREFIX = "olcum_"
+
+
+def _record_type(kind: str) -> str:
+    if kind not in _KINDS:
+        raise HTTPException(status_code=400, detail=f"Geçersiz kind: {kind}")
+    return _KINDS[kind]
+
+
+def _ideal_repetitions(record_type: str) -> int:
+    if record_type == RECORD_TYPE_SENTENCE:
+        return int(config.SENTENCE_REPETITIONS)
+    return int(config.IDEAL_REPETITIONS)
+
+
+def _metadata_path(user_id: str, record_type: str) -> Path:
+    return Path(config.BASE_PATH) / user_id / METADATA_FILENAMES[record_type]
+
+
 def _metadata_words_path(user_id: str) -> Path:
-    user_path = Path(config.BASE_PATH) / user_id
-    return user_path / METADATA_FILENAMES[RECORD_TYPE_WORD]
+    return _metadata_path(user_id, RECORD_TYPE_WORD)
 
 
 def _get_recorded_details_words(user_id: str) -> Dict[str, int]:
+    return _get_recorded_details(user_id, RECORD_TYPE_WORD)
+
+
+def _get_recorded_details(user_id: str, record_type: str) -> Dict[str, int]:
     """
-    pandas'a ihtiyaç duymadan metadata_words.csv içinden kelime->adet çıkarır.
+    pandas'a ihtiyaç duymadan metadata dosyasından metin->adet çıkarır.
     """
-    path = _metadata_words_path(user_id)
+    path = _metadata_path(user_id, record_type)
     if not path.exists():
         return {}
 
@@ -139,21 +164,24 @@ def _append_metadata_words_row(user_id: str, row: Dict[str, Any]) -> None:
         writer.writerow(row_to_save)
 
 
-def _dataset_words_dir() -> Path:
-    return Path(DATASET_DIRS[RECORD_TYPE_WORD])
+def _dataset_dir(record_type: str) -> Path:
+    return Path(DATASET_DIRS[record_type])
 
 
-def _read_word_set_file(set_file: str) -> List[str]:
+def _read_set_file(set_file: str, record_type: str = RECORD_TYPE_WORD) -> List[str]:
     """
-    collect_data.py mantığına benzer şekilde kelime setini txt'den okur.
+    collect_data.py mantığına benzer şekilde set dosyasını txt'den okur.
     Boş satırları atar.
     """
-    words_dir = _dataset_words_dir()
-    path = (words_dir / set_file).resolve()
+    set_dir = _dataset_dir(record_type).resolve()
+    path = (set_dir / set_file).resolve()
 
-    # Güvenlik: datasets/words_set dışına çıkmayı engelle
-    if words_dir.resolve() not in path.parents and path != words_dir.resolve():
+    # Güvenlik: set dizini dışına çıkmayı engelle
+    if set_dir not in path.parents:
         raise ValueError("Geçersiz set_file yolu.")
+
+    if record_type == RECORD_TYPE_SENTENCE and not path.name.startswith(_SENTENCE_SET_PREFIX):
+        raise FileNotFoundError(f"Set dosyası bulunamadı: {set_file}")
 
     if not path.exists():
         raise FileNotFoundError(f"Set dosyası bulunamadı: {set_file}")
@@ -167,7 +195,12 @@ def _read_word_set_file(set_file: str) -> List[str]:
     return lines
 
 
-def _get_next_word_and_rep(user_id: str, set_file: str, exclude: Optional[Set[str]] = None) -> Dict[str, Any]:
+def _get_next_word_and_rep(
+    user_id: str,
+    set_file: str,
+    exclude: Optional[Set[str]] = None,
+    record_type: str = RECORD_TYPE_WORD,
+) -> Dict[str, Any]:
     """
     collect_data.py'deki resume/eksik kayıt mantığının API versiyonu:
     - Setteki kelimeleri sırayla gezer
@@ -177,9 +210,9 @@ def _get_next_word_and_rep(user_id: str, set_file: str, exclude: Optional[Set[st
       kayıtları olan kelimeler için kullanılır; kullanıcı yüklemeyi
       beklemeden bir sonraki kelimeye geçebilsin diye)
     """
-    words = _read_word_set_file(set_file)
-    details = _get_recorded_details_words(user_id)
-    ideal = int(config.IDEAL_REPETITIONS)
+    words = _read_set_file(set_file, record_type)
+    details = _get_recorded_details(user_id, record_type)
+    ideal = _ideal_repetitions(record_type)
     exclude = exclude or set()
 
     for w in words:
@@ -323,39 +356,54 @@ async def upload_record(
     }
 
 
+def _set_error(record_type: str, e: Exception):
+    # Kelime yolu eskisi gibi 200 + error; cumle modunda bulunamayan/gecersiz set 404
+    if record_type == RECORD_TYPE_SENTENCE and isinstance(e, (FileNotFoundError, ValueError)):
+        return JSONResponse(status_code=404, content={"error": str(e)})
+    return {"error": str(e)}
+
+
 @app.get("/collect/word-sets")
-async def list_word_sets():
-    """datasets/words_set içindeki set dosyalarını listeler."""
-    d = _dataset_words_dir()
+async def list_word_sets(kind: str = "word"):
+    """Set dosyalarını listeler (cümle modunda yalnızca olcum_*.txt)."""
+    record_type = _record_type(kind)
+    d = _dataset_dir(record_type)
     if not d.exists():
         return {"sets": []}
-    sets = sorted([p.name for p in d.glob("*.txt")])
+    pattern = f"{_SENTENCE_SET_PREFIX}*.txt" if record_type == RECORD_TYPE_SENTENCE else "*.txt"
+    sets = sorted([p.name for p in d.glob(pattern)])
     return {"sets": sets}
 
 
 @app.get("/collect/next-word")
-async def get_next_word(user_id: str, set_file: str = "wordSet.txt", exclude: str = ""):
+async def get_next_word(user_id: str, set_file: str = "wordSet.txt", exclude: str = "", kind: str = "word"):
     """
-    Mobil tarafın 'collect_data.py' akışına benzer biçimde sıradaki kelimeyi alması için.
-    `exclude`: virgülle ayrılmış, atlanacak kelimeler (cihazda bekleyen kayıtları
-    olan kelimeler için — kullanıcı yüklemeden bir sonraki kelimeye geçebilsin).
+    Mobil tarafın 'collect_data.py' akışına benzer biçimde sıradaki kelimeyi/cümleyi alması için.
+    `exclude`: atlanacak metinler (cihazda bekleyen kayıtları olanlar için — kullanıcı
+    yüklemeden bir sonrakine geçebilsin). Kelimeler virgülle, cümleler (içlerinde
+    virgül olabilir) satır sonuyla ayrılır.
     """
+    record_type = _record_type(kind)
+    separator = "\n" if record_type == RECORD_TYPE_SENTENCE else ","
     try:
-        exclude_set = {w.strip() for w in exclude.split(",") if w.strip()}
-        return _get_next_word_and_rep(user_id=user_id, set_file=set_file, exclude=exclude_set)
+        exclude_set = {w.strip() for w in exclude.split(separator) if w.strip()}
+        return _get_next_word_and_rep(
+            user_id=user_id, set_file=set_file, exclude=exclude_set, record_type=record_type
+        )
     except Exception as e:
-        return {"error": str(e)}
+        return _set_error(record_type, e)
 
 
 @app.get("/collect/progress")
-async def get_progress(user_id: str, set_file: str = "wordSet.txt"):
+async def get_progress(user_id: str, set_file: str = "wordSet.txt", kind: str = "word"):
     """
     Set bazında ilerleme özeti.
     """
+    record_type = _record_type(kind)
     try:
-        words = _read_word_set_file(set_file)
-        details = _get_recorded_details_words(user_id)
-        ideal = int(config.IDEAL_REPETITIONS)
+        words = _read_set_file(set_file, record_type)
+        details = _get_recorded_details(user_id, record_type)
+        ideal = _ideal_repetitions(record_type)
         completed = sum(1 for w in words if int(details.get(w, 0)) >= ideal)
         return {
             "set_file": set_file,
@@ -364,7 +412,7 @@ async def get_progress(user_id: str, set_file: str = "wordSet.txt"):
             "ideal_repetitions": ideal,
         }
     except Exception as e:
-        return {"error": str(e)}
+        return _set_error(record_type, e)
 
 @app.post("/train")
 async def start_training(user_id: str, background_tasks: BackgroundTasks):

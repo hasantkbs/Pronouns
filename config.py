@@ -40,6 +40,7 @@ CONSISTENCY_TOLERANCE = 0.5
 
 # --- Kayıt Tekrar Ayarları ---
 IDEAL_REPETITIONS = 5
+SENTENCE_REPETITIONS = 2  # Cumle olcum kaydi: her cumle 2 kez okunur
 
 # --- Sistem Ayarları ---
 GECICI_DOSYA_YOLU = "temp_recording.wav"
