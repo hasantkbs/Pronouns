@@ -11,6 +11,7 @@ import shutil
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Set
 import csv
+import json
 import hashlib
 
 import config
@@ -50,7 +51,7 @@ app.add_middleware(
 
 # API anahtarı ile korunmayan yollar: APK henüz kurulmamışken indirilebilmeli,
 # sentezlenmiş sesler audioplayers ile custom header olmadan oynatılıyor.
-_API_KEY_EXEMPT_PATHS = {"/apk"}
+_API_KEY_EXEMPT_PATHS = {"/apk", "/apk/version"}
 _API_KEY_EXEMPT_PREFIXES = ("/download/",)
 
 
@@ -588,10 +589,26 @@ p{{color:#666;line-height:1.7;margin-bottom:1.5rem;font-size:0.95rem}}
 </html>"""
 
 
+def _apk_dir() -> Path:
+    return Path(config.BASE_PATH).parent / "apk"
+
+
+@app.get("/apk/version")
+async def apk_version():
+    """Sunucudaki APK'nın sürümü; uygulama içi güncelleme şeridi bununla karşılaştırır."""
+    try:
+        info = json.loads((_apk_dir() / "version.json").read_text(encoding="utf-8"))
+        int(info["versionCode"])
+    except (OSError, ValueError, KeyError, TypeError):
+        # Dosya yoksa/bozuksa güncelleme önerilmez
+        return {"versionCode": 0}
+    return info
+
+
 @app.get("/apk")
 async def download_apk():
     """APK dosyasını indirir."""
-    apk_path = Path(config.BASE_PATH).parent / "apk" / "pronouns.apk"
+    apk_path = _apk_dir() / "pronouns.apk"
 
     _apk_logger.info(
         "APK download requested | path: %s | timestamp: %s",
