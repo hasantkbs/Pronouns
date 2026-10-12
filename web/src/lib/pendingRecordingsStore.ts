@@ -1,10 +1,19 @@
 import { openDB, type IDBPDatabase } from 'idb';
+import type { RecordKind } from './api';
 
 export interface PendingTake {
   id: number;
+  /** Kelime ya da cümle metni. */
   word: string;
   audioBlob: Blob;
   recordedAt: string;
+  /** Cümle modundan önce kaydedilenlerde yok. */
+  kind?: RecordKind;
+}
+
+/** Alanı olmayan eski kayıtlar kelimedir. */
+export function takeKind(take: Pick<PendingTake, 'kind'>): RecordKind {
+  return take.kind ?? 'word';
 }
 
 const DB_NAME = 'furkanca-pending-recordings';
@@ -31,10 +40,11 @@ function getDb(): Promise<IDBPDatabase> {
 export async function addTake(
   word: string,
   audioBlob: Blob,
+  kind: RecordKind = 'word',
   now: Date = new Date(),
 ): Promise<PendingTake> {
   const db = await getDb();
-  const record = { word, audioBlob, recordedAt: now.toISOString() };
+  const record = { word, audioBlob, recordedAt: now.toISOString(), kind };
   const id = (await db.add(STORE_NAME, record)) as number;
   return { id, ...record };
 }
@@ -54,9 +64,9 @@ export async function getTakesForWord(word: string): Promise<PendingTake[]> {
   return db.getAllFromIndex(STORE_NAME, WORD_INDEX, word);
 }
 
-export async function getPendingWords(): Promise<Set<string>> {
+export async function getPendingWords(kind: RecordKind = 'word'): Promise<Set<string>> {
   const takes = await getAllTakes();
-  return new Set(takes.map((t) => t.word));
+  return new Set(takes.filter((t) => takeKind(t) === kind).map((t) => t.word));
 }
 
 export async function _resetForTests(): Promise<void> {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { uploadRecording } from '../lib/api';
-import { getAllTakes, removeTake, type PendingTake } from '../lib/pendingRecordingsStore';
+import { getAllTakes, removeTake, takeKind, type PendingTake } from '../lib/pendingRecordingsStore';
 
 type UploadStatus = 'uploading' | 'error';
 
@@ -26,7 +26,7 @@ export default function PendingUploadsPage() {
     for (const take of current) {
       setStatus((prev) => ({ ...prev, [take.id]: 'uploading' }));
       try {
-        await uploadRecording(take.word, take.audioBlob);
+        await uploadRecording(take.word, take.audioBlob, takeKind(take));
         await removeTake(take.id);
         setStatus((prev) => {
           const next = { ...prev };

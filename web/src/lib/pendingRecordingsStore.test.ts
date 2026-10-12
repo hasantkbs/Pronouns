@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto';
+import { openDB } from 'idb';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   _resetForTests,
@@ -7,6 +8,7 @@ import {
   getPendingWords,
   getTakesForWord,
   removeTake,
+  takeKind,
 } from './pendingRecordingsStore';
 
 beforeEach(async () => {
@@ -49,5 +51,33 @@ describe('pendingRecordingsStore', () => {
     await addTake('nar', blob);
     await addTake('vişne', blob);
     expect(await getPendingWords()).toEqual(new Set(['nar', 'vişne']));
+  });
+
+  it('stores the kind of a take', async () => {
+    const blob = new Blob([new Uint8Array([1])], { type: 'audio/wav' });
+    await addTake('Su yok.', blob, 'sentence');
+    const [take] = await getAllTakes();
+    expect(take.kind).toBe('sentence');
+    expect(takeKind(take)).toBe('sentence');
+  });
+
+  it('treats takes saved before kind existed as words', async () => {
+    await getAllTakes(); // veritabanini olusturur
+    const db = await openDB('furkanca-pending-recordings', 1);
+    await db.add('takes', { word: 'elma', audioBlob: new Blob([]), recordedAt: '2026-10-01T00:00:00Z' });
+    db.close();
+
+    const [take] = await getAllTakes();
+    expect(takeKind(take)).toBe('word');
+    expect(await getPendingWords('word')).toEqual(new Set(['elma']));
+    expect(await getPendingWords('sentence')).toEqual(new Set());
+  });
+
+  it('filters pending texts by kind', async () => {
+    const blob = new Blob([new Uint8Array([1])], { type: 'audio/wav' });
+    await addTake('nar', blob);
+    await addTake('Su yok.', blob, 'sentence');
+    expect(await getPendingWords('word')).toEqual(new Set(['nar']));
+    expect(await getPendingWords('sentence')).toEqual(new Set(['Su yok.']));
   });
 });
