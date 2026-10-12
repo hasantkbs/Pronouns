@@ -104,7 +104,12 @@ yapısal (native) değişikliklerde yeniden kurulsun.
 
 1. Sunucu: `canli-arayuz` → `master` merge; API'yi kullanıcı yeniden başlatır.
 2. Web: `cd .claude/worktrees/react-rewrite/web && npm run build`
-   (**`deploy-web.sh` kullanılmaz**).
+   (**`deploy-web.sh` kullanılmaz**). İlk kez `serve.json` geldiği için
+   kullanıcı bir kez `sudo systemctl restart pronouns-web.service` çalıştırır:
+   `serve` yapılandırmayı yalnızca açılışta okur. Kontrol:
+   `curl -sI https://app.furkanca.algorixstudio.com/kayit` → `Cache-Control: no-cache`.
+   Bu doğrulanmadan APK kurulmaz (aksi halde önbellekte kalan eski `index.html`
+   bir sonraki derlemeden sonra beyaz ekran verir).
 3. Furkan eski uygulamada Bekleyen Kayıtlar → "Tümünü Yükle".
 4. APK: `web/deploy-android.sh` (sürüm 2); Furkan `/apk`'dan **üstüne** kurar.
 5. Sonrası: arayüz değişiklikleri yalnızca `npm run build`; native

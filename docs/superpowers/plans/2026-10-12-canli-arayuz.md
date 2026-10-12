@@ -777,7 +777,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ## Dağıtım ve elle doğrulama (plan sonrası, kullanıcı onayıyla)
 
 1. Sunucu: `canli-arayuz` → `master` merge + push; kullanıcı `sudo systemctl restart pronouns-api.service`. Kontrol: `curl -s https://furkanca.algorixstudio.com/apk/version` → `{"versionCode":0}`.
-2. Web: `cd .claude/worktrees/react-rewrite/web && npm run build`. Kontrol: `curl -sI https://app.furkanca.algorixstudio.com/kayit | grep -i cache-control` → `no-cache`.
+2. Web: `cd .claude/worktrees/react-rewrite/web && npm run build`; ardından kullanıcı **bir kez** `sudo systemctl restart pronouns-web.service` (`serve` `serve.json`'ı yalnızca açılışta okur). Kontrol: `curl -sI https://app.furkanca.algorixstudio.com/kayit | grep -i cache-control` → `no-cache`. Doğrulanmadan 4. adıma geçilmez.
 3. Furkan **eski** uygulamada Bekleyen Kayıtlar → "Tümünü Yükle" (kabukta eski bekleyenler görünmez).
 4. APK: `web/deploy-android.sh` → `versionCode 2`; Furkan `/apk`'dan **üstüne** kurar (son elle kurulum). Telefonda: Furkanca'da konuşma (mikrofon), Kayıt'ta kelime ve cümle kaydı, uçak modunda açılışta `offline.html`.
 5. Şerit denemesi (isteğe bağlı): ikinci `deploy-android.sh` → `versionCode 3`; uygulamayı açınca şerit çıkar, "Güncelle" ile üstüne kurulur.
