@@ -5,6 +5,10 @@ import { playAudio, PLAYBACK_TIMEOUT_MS, startUnlessCancelled } from '../lib/dea
 import { buttonEnabled, flowReducer, formatElapsed, initialFlowState, type Phase } from '../lib/furkancaFlow';
 import { ManualRecorder } from '../lib/manualRecorder';
 import { pcmToWav } from '../lib/wav';
+import AppBar from '../components/AppBar';
+import Icon from '../components/Icon';
+import { FilledButton, ProgressBar, ResultTile } from '../components/ui';
+import { formatClock } from '../lib/uiFormat';
 
 const STATUS_TEXT: Record<Phase, string> = {
   idle: 'Hazır',
@@ -101,33 +105,43 @@ export default function FurkancaPage() {
   }, [finishRecording]);
 
   const recording = state.phase === 'recording';
+  const active = state.phase !== 'idle';
 
   return (
-    <main>
-      <h1>Furkanca</h1>
-      <button
-        type="button"
-        disabled={!buttonEnabled(state.phase)}
-        onClick={() => (recording ? finishRecording() : void startRecording())}
-        style={{ width: '100%', minHeight: '30vh', fontSize: '2rem' }}
-      >
-        {recording ? '⏹ Bitir' : '🎤 Konuşmaya Başla'}
-      </button>
-      <p>Durum: {STATUS_TEXT[state.phase]}</p>
-      {recording && (
-        <p>
-          {formatElapsed(elapsedMs)}{' '}
-          <meter min={0} max={0.3} value={Math.min(level, 0.3)} aria-label="Ses seviyesi" />
+    <main className="page">
+      <AppBar title="Furkanca" backTo="/" />
+      <div className="page-body">
+        <p className="muted">
+          Düğmeye dokun, konuş, bitince tekrar dokun — AI konuşmanı düzeltilmiş hâle çevirsin ve yüksek sesle
+          okusun.
         </p>
-      )}
-      {state.error && <p role="alert">{state.error}</p>}
-      <ul>
-        {state.history.map((entry, i) => (
-          <li key={i}>
-            {entry.time.toLocaleTimeString()} — {entry.text}
-          </li>
-        ))}
-      </ul>
+        <div className="row" style={{ color: 'var(--accent)' }}>
+          <Icon name={active ? 'graphic_eq' : 'mic_off'} size={18} />
+          <span style={{ color: 'var(--on-surface)', fontSize: 13 }}>{STATUS_TEXT[state.phase]}</span>
+        </div>
+        <FilledButton
+          icon={recording ? 'stop' : 'mic'}
+          className={`button--tall${recording ? ' button--danger' : ''}`}
+          disabled={!buttonEnabled(state.phase)}
+          onClick={() => (recording ? finishRecording() : void startRecording())}
+        >
+          {recording ? `Bitir ${formatElapsed(elapsedMs)}` : 'Konuşmaya Başla'}
+        </FilledButton>
+        {recording && <ProgressBar value={(Math.min(level, 0.3) / 0.3) * 100} label="Ses seviyesi" />}
+        {state.error && <ResultTile label="Hata" value={state.error} tone="error" />}
+        {state.history.length === 0 ? (
+          <p className="empty">Henüz çeviri yok.</p>
+        ) : (
+          <ul className="stack" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {state.history.map((entry, i) => (
+              <li key={i} className="history-card">
+                <div className="history-time">{formatClock(entry.time)}</div>
+                <div className="history-text">{entry.text}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </main>
   );
 }
