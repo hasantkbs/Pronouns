@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
@@ -14,6 +14,13 @@ describe('AppBar', () => {
     expect(out).toContain('href="/"');
     expect(out).toContain('aria-label="Geri"');
     expect(out).toContain('Kayıt');
+  });
+
+  it('replaces the history entry so the phone back key on home closes the app', () => {
+    // <Link> push'u Home -> Kayit -> ok -> Home sonrasi geri tusunu Kayit'a dondururdu
+    const link = (AppBar({ title: 'Kayıt', backTo: '/' }) as ReactElement<{ children: ReactElement[] }>).props
+      .children[0];
+    expect(link.props).toMatchObject({ to: '/', replace: true });
   });
 
   it('renders an optional action on the right', () => {
