@@ -2,7 +2,7 @@ import { fetchWithTimeout, TRANSLATE_TIMEOUT_MS } from './deadlines';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const API_KEY = import.meta.env.VITE_API_KEY;
-const USER_ID = 'FurkanV1';
+export const USER_ID = 'FurkanV1';
 
 function authHeaders(extra?: Record<string, string>): Record<string, string> {
   return { 'X-API-Key': API_KEY, ...extra };
