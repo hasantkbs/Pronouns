@@ -7,6 +7,10 @@ import { formatElapsed } from '../lib/furkancaFlow';
 import { ManualRecorder } from '../lib/manualRecorder';
 import { RequestGate } from '../lib/requestGate';
 import { pcmToWav } from '../lib/wav';
+import AppBar from '../components/AppBar';
+import Icon from '../components/Icon';
+import { FilledButton, OutlinedButton, ProgressBar, ResultTile, SegmentedButton } from '../components/ui';
+import { progressPercent } from '../lib/uiFormat';
 import { addTake, getAllTakes, getPendingWords, getTakesForWord } from '../lib/pendingRecordingsStore';
 
 const DEFAULT_WORD_SET = 'wordSet.txt';
@@ -260,133 +264,154 @@ export default function KayitPage() {
   const wordFull = word !== null && currentCount + wordPendingCount >= idealReps;
   const repsDone = currentCount + wordPendingCount;
 
+  const nextLabel = kind === 'word' ? 'Sıradaki Kelime' : 'Sıradaki Cümle';
+  const goNext = () => {
+    void refreshWord();
+    void refreshProgress();
+  };
+
   return (
-    <main>
-      <h1>Kayıt</h1>
-      <p>
-        <Link to="/kayit/bekleyen">Bekleyen Kayıtlar ({pendingCount})</Link>
-      </p>
+    <main className="page">
+      <AppBar
+        title="Kayıt"
+        backTo="/"
+        action={
+          <Link to="/kayit/bekleyen" className="icon-button" aria-label={`Bekleyen Kayıtlar (${pendingCount})`}>
+            <Icon name="folder_open" />
+            {pendingCount > 0 && <span className="badge">{pendingCount}</span>}
+          </Link>
+        }
+      />
+      <div className="page-body">
+        <div>
+          <div className="row row--between">
+            <span>
+              İlerleme: {completedWords} / {totalWords} {unit}
+            </span>
+            <span className="value">{progressPercent(completedWords, totalWords)}%</span>
+          </div>
+          {pendingCount > 0 && <p className="faint small">+{pendingCount} kayıt cihazda bekliyor</p>}
+          <div style={{ marginTop: 6 }}>
+            <ProgressBar value={progressPercent(completedWords, totalWords)} label="İlerleme" />
+          </div>
+        </div>
 
-      <div role="group" aria-label="Kayıt türü">
-        <button
-          type="button"
-          aria-pressed={kind === 'word'}
+        <SegmentedButton
+          label="Kayıt türü"
+          options={[
+            { value: 'word', label: 'Kelime' },
+            { value: 'sentence', label: 'Cümle' },
+          ]}
+          value={kind}
           disabled={busy}
-          onClick={() => changeKind('word')}
-        >
-          Kelime
-        </button>
-        <button
-          type="button"
-          aria-pressed={kind === 'sentence'}
-          disabled={busy}
-          onClick={() => changeKind('sentence')}
-        >
-          Cümle
-        </button>
-      </div>
+          onChange={changeKind}
+        />
 
-      <label>
-        {kind === 'word' ? 'Kelime Seti' : 'Cümle Seti'}
-        <select
-          value={setFile}
-          onChange={(e) => {
-            setSkipped([]);
-            setSetFile(e.target.value);
-          }}
-          disabled={busy}
-        >
-          {sets.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <p>
-        İlerleme: {completedWords} / {totalWords} {unit}
-      </p>
-
-      {word === null ? (
-        done && <p>Tüm {unit}ler tamamlandı!</p>
-      ) : kind === 'word' ? (
-        <>
-          <h2>{word}</h2>
-          <p>
-            {repsDone} / {idealReps} tekrar
-          </p>
-
-          <label>
-            Kayıt süresi: {seconds}sn
-            <input
-              type="range"
-              min={1}
-              max={5}
-              value={seconds}
-              disabled={recording}
-              onChange={(e) => setSeconds(Number(e.target.value))}
-            />
-          </label>
-
-          <button onClick={handleRecord} disabled={recording || wordFull}>
-            {recording ? `Kaydediliyor... ${remaining}` : 'Kaydet'}
-          </button>
-
-          {wordFull && (
-            <button
-              onClick={() => {
-                void refreshWord();
-                void refreshProgress();
-              }}
-            >
-              Sıradaki Kelime
-            </button>
-          )}
-        </>
-      ) : (
-        <>
-          <h2 style={{ fontSize: '2rem' }}>{word}</h2>
-          <p>
-            Bu cümle: {repsDone} / {idealReps}
-          </p>
-
-          <button
-            type="button"
-            disabled={
-              sentencePhase === 'starting' || (sentencePhase === 'idle' && (wordFull || wordLoading))
-            }
-            onClick={() =>
-              sentencePhase === 'recording' ? void finishSentence() : void startSentence()
-            }
-            style={{ width: '100%', minHeight: '20vh', fontSize: '1.5rem' }}
+        <label className="field">
+          <span className="field-label">{kind === 'word' ? 'Kelime Seti' : 'Cümle Seti'}</span>
+          <Icon name="list_alt" />
+          <select
+            value={setFile}
+            onChange={(e) => {
+              setSkipped([]);
+              setSetFile(e.target.value);
+            }}
+            disabled={busy}
           >
-            {sentencePhase === 'recording'
-              ? `⏹ Bitir ${formatElapsed(elapsedMs)}`
-              : sentencePhase === 'starting'
-                ? 'Mikrofon açılıyor...'
-                : '🎤 Okumaya Başla'}
-          </button>
+            {sets.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
 
-          {wordFull ? (
-            <button
-              type="button"
-              onClick={() => {
-                void refreshWord();
-                void refreshProgress();
-              }}
+        {word === null ? (
+          done && (
+            <div className="target-card target-card--done">
+              <Icon name="check_circle" size={28} />
+              <strong style={{ fontSize: 16 }}>Tüm {unit}ler tamamlandı!</strong>
+            </div>
+          )
+        ) : (
+          <div className="target-card">
+            <h2 className={kind === 'word' ? 'target-word' : 'target-word target-word--sentence'}>{word}</h2>
+            <p className="muted">
+              {wordFull ? `Bu ${unit} tamamlandı` : `Sıradaki Tekrar: ${repsDone + 1}`} · Mevcut: {repsDone} / {idealReps}
+            </p>
+          </div>
+        )}
+
+        {word !== null && kind === 'word' && (
+          <>
+            <div>
+              <div className="row">
+                <Icon name="timer" size={18} />
+                <span>Kayıt süresi: {seconds} sn</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={5}
+                value={seconds}
+                disabled={recording}
+                aria-label="Kayıt süresi"
+                onChange={(e) => setSeconds(Number(e.target.value))}
+              />
+            </div>
+
+            {recording && (
+              <div className="stack">
+                <ProgressBar value={((seconds - remaining) / seconds) * 100} label="Kayıt süresi" />
+                <p className="small">Kayıt alınıyor... {remaining} sn kaldı</p>
+              </div>
+            )}
+
+            <FilledButton
+              icon={recording ? 'hourglass_top' : 'mic'}
+              onClick={handleRecord}
+              disabled={recording || wordFull}
             >
-              Sıradaki Cümle
-            </button>
-          ) : (
-            <button type="button" disabled={busy || wordLoading} onClick={skipSentence}>
-              Atla
-            </button>
-          )}
-        </>
-      )}
+              {recording ? 'Kaydediliyor...' : 'Kaydet (Cihazda Sakla)'}
+            </FilledButton>
 
-      {status && <p>{status}</p>}
+            {wordFull && (
+              <OutlinedButton icon="skip_next" onClick={goNext}>
+                {nextLabel}
+              </OutlinedButton>
+            )}
+          </>
+        )}
+
+        {word !== null && kind === 'sentence' && (
+          <>
+            <FilledButton
+              icon={sentencePhase === 'recording' ? 'stop' : sentencePhase === 'starting' ? 'hourglass_top' : 'mic'}
+              className={`button--tall${sentencePhase === 'recording' ? ' button--danger' : ''}`}
+              disabled={sentencePhase === 'starting' || (sentencePhase === 'idle' && (wordFull || wordLoading))}
+              onClick={() => (sentencePhase === 'recording' ? void finishSentence() : void startSentence())}
+            >
+              {sentencePhase === 'recording'
+                ? `Bitir ${formatElapsed(elapsedMs)}`
+                : sentencePhase === 'starting'
+                  ? 'Mikrofon açılıyor...'
+                  : 'Okumaya Başla'}
+            </FilledButton>
+
+            {wordFull ? (
+              <OutlinedButton icon="skip_next" onClick={goNext}>
+                {nextLabel}
+              </OutlinedButton>
+            ) : (
+              <OutlinedButton icon="skip_next" disabled={busy || wordLoading} onClick={skipSentence}>
+                Atla
+              </OutlinedButton>
+            )}
+          </>
+        )}
+
+        {status && <ResultTile label="Durum" value={status} />}
+      </div>
     </main>
   );
 }
