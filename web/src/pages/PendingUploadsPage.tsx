@@ -77,7 +77,7 @@ export default function PendingUploadsPage() {
               <h2 className="take-group-title">{w}</h2>
               {wTakes.map((take, i) => (
                 <div key={take.id} className="take-row">
-                  <span>Tekrar {i + 1}</span>
+                  <span className="take-label">Tekrar {i + 1}</span>
                   {status[take.id] === 'uploading' ? (
                     <span className="spinner" role="status" aria-label="Yükleniyor" />
                   ) : (
