@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { uploadRecording } from '../lib/api';
 import { getAllTakes, removeTake, takeKind, type PendingTake } from '../lib/pendingRecordingsStore';
+import { groupByWord } from '../lib/uiFormat';
+import AppBar from '../components/AppBar';
+import Icon from '../components/Icon';
+import { FilledButton, IconButton } from '../components/ui';
 
 type UploadStatus = 'uploading' | 'error';
 
@@ -48,52 +52,58 @@ export default function PendingUploadsPage() {
     setTakes((prev) => prev.filter((t) => t.id !== id));
   }
 
-  const byWord = new Map<string, PendingTake[]>();
-  for (const t of takes) {
-    const list = byWord.get(t.word) ?? [];
-    list.push(t);
-    byWord.set(t.word, list);
-  }
+  const groups = groupByWord(takes);
 
   return (
-    <main>
-      <h1>Bekleyen Kayıtlar</h1>
-      <p>
-        {takes.length} kayıt, {byWord.size} kelime bekliyor.
-      </p>
-      <button onClick={handleUploadAll} disabled={uploadingAll || takes.length === 0}>
-        {uploadingAll ? 'Yükleniyor...' : 'Tümünü Yükle'}
-      </button>
+    <main className="page">
+      <AppBar title="Bekleyen Kayıtlar" backTo="/kayit" />
+      <div className="page-body">
+        <p className="muted">
+          {takes.length} kayıt, {groups.length} kelime bekliyor.
+        </p>
+        <FilledButton
+          icon={uploadingAll ? 'hourglass_top' : 'cloud_upload'}
+          onClick={handleUploadAll}
+          disabled={uploadingAll || takes.length === 0}
+        >
+          {uploadingAll ? 'Yükleniyor...' : 'Tümünü Yükle'}
+        </FilledButton>
 
-      {takes.length === 0 ? (
-        <p>Bekleyen kayıt yok.</p>
-      ) : (
-        Array.from(byWord.entries()).map(([w, wTakes]) => (
-          <section key={w}>
-            <h2>{w}</h2>
-            {wTakes.map((take, i) => (
-              <div key={take.id}>
-                <span>Tekrar {i + 1}</span>
-                {status[take.id] === 'uploading' && <span>Yükleniyor...</span>}
-                {status[take.id] === 'error' && <span title={errors[take.id]}>Hata</span>}
-                {status[take.id] !== 'uploading' && (
-                  <>
-                    <button
-                      onClick={() => {
-                        const audio = new Audio(URL.createObjectURL(take.audioBlob));
-                        void audio.play();
-                      }}
-                    >
-                      Oynat
-                    </button>
-                    <button onClick={() => handleDelete(take.id)}>Sil</button>
-                  </>
-                )}
-              </div>
-            ))}
-          </section>
-        ))
-      )}
+        {takes.length === 0 ? (
+          <p className="empty">Bekleyen kayıt yok.</p>
+        ) : (
+          groups.map(([w, wTakes]) => (
+            <section key={w}>
+              <h2 className="take-group-title">{w}</h2>
+              {wTakes.map((take, i) => (
+                <div key={take.id} className="take-row">
+                  <span>Tekrar {i + 1}</span>
+                  {status[take.id] === 'uploading' ? (
+                    <span className="spinner" role="status" aria-label="Yükleniyor" />
+                  ) : (
+                    <>
+                      {status[take.id] === 'error' && (
+                        <span className="error-icon" role="img" aria-label="Hata" title={errors[take.id]}>
+                          <Icon name="error_outline" size={20} />
+                        </span>
+                      )}
+                      <IconButton
+                        icon="play_arrow"
+                        label="Oynat"
+                        onClick={() => {
+                          const audio = new Audio(URL.createObjectURL(take.audioBlob));
+                          void audio.play();
+                        }}
+                      />
+                      <IconButton icon="delete_outline" label="Sil" onClick={() => handleDelete(take.id)} />
+                    </>
+                  )}
+                </div>
+              ))}
+            </section>
+          ))
+        )}
+      </div>
     </main>
   );
 }

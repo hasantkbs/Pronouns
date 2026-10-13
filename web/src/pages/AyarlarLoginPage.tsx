@@ -1,4 +1,7 @@
 import { useState, type FormEvent } from 'react';
+import AppBar from '../components/AppBar';
+import Icon from '../components/Icon';
+import { FilledButton } from '../components/ui';
 
 const ADMIN_USERNAME = 'admin';
 const ADMIN_PASSWORD = 'adminpassword';
@@ -18,23 +21,35 @@ export default function AyarlarLoginPage({ onSuccess }: { onSuccess: () => void 
   }
 
   return (
-    <main>
-      <h1>Ayarlar Girişi</h1>
-      <form onSubmit={handleSubmit}>
-        <label>
-          Kullanıcı Adı
-          <input value={username} onChange={(e) => setUsername(e.target.value)} />
+    <main className="page">
+      <AppBar title="Ayarlar Girişi" backTo="/" />
+      <form className="page-body" style={{ justifyContent: 'center' }} onSubmit={handleSubmit}>
+        <span className="settings-lock">
+          <Icon name="lock_outline" size={48} />
+        </span>
+        <label className="field">
+          <span className="field-label">Kullanıcı Adı</span>
+          <Icon name="person_outline" />
+          <input value={username} autoComplete="username" onChange={(e) => setUsername(e.target.value)} />
         </label>
-        <label>
-          Şifre
+        <label className="field">
+          <span className="field-label">Şifre</span>
+          <Icon name="key" />
           <input
             type="password"
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
         </label>
-        {error && <p role="alert">{error}</p>}
-        <button type="submit">Giriş Yap</button>
+        {error && (
+          <p role="alert" className="error-text">
+            {error}
+          </p>
+        )}
+        <FilledButton type="submit" icon="login" className="button--settings">
+          Giriş Yap
+        </FilledButton>
       </form>
     </main>
   );
