@@ -67,7 +67,7 @@ renkli düğmeler, kartlar ve okunaklı yazılar vardı.
 | **Kayıt** | `AppBar` "Kayıt"; sağda rozetli `folder_open` → Bekleyen Kayıtlar. "İlerleme: x / y kelime\|cümle" + yüzde, `ProgressBar`; bekleyen varsa "+N kayıt cihazda bekliyor". **Kelime \| Cümle** `SegmentedButton`. Çerçeveli, `list_alt` ikonlu set seçimi ("Kelime Seti" / "Cümle Seti"). Hedef kartı: kelime 30 px / cümle 24 px kalın, altında "Sıradaki Tekrar: n · Mevcut: m / ideal"; set bitince `check_circle` + "Tüm kelimeler tamamlandı!" kartı. Kelime modunda `timer` ikonlu "Kayıt süresi: n sn" kaydırıcı (bugünkü 1–5), kayıtta geri sayım `ProgressBar` + "Kayıt alınıyor... n sn kaldı", `FilledButton` "Kaydet (Cihazda Sakla)". Cümle modunda büyük başlat/bitir `FilledButton` ("Okumaya Başla" / "Bitir" + süre). Altında `OutlinedButton` "Sıradaki Kelime\|Cümle" (`skip_next`, bugünkü koşulla) ve cümle modunda "Atla". Durum mesajı `ResultTile` "Durum". |
 | **Bekleyen Kayıtlar** | `AppBar` "Bekleyen Kayıtlar" (geri → Kayıt). "N kayıt, M kelime bekliyor." `FilledButton` "Tümünü Yükle" (`cloud_upload`, yüklenirken `hourglass_top` "Yükleniyor..."). Kelimeye göre gruplu liste: 18 px kalın başlık, "Tekrar n" satırları; yüklenirken dönen gösterge, hatada kırmızı `error_outline` (hata metni `title`), boştayken `play_arrow` ve `delete_outline` ikon düğmeleri. Boşken "Bekleyen kayıt yok." |
 | **Ayarlar Girişi** | `AppBar` "Ayarlar Girişi". Ortada turuncu `lock_outline` (48 px), çerçeveli ikonlu "Kullanıcı Adı" ve "Şifre" alanları, kırmızı hata metni, turuncu `FilledButton` "Giriş Yap" (`login`). |
-| **Ayarlar** | `AppBar` "Model Ayarları"; turuncu vurgu. Bugünkü alanlar, Flutter biçiminde: `SectionHeader` "Model Tercihi" + `SegmentedButton`; "Fine-Tune Algoritması" + `SegmentedButton` (büyük harf); "Kendi Kendine Öğrenme" anahtarı (alt yazı "Yeni kayıtlar otomatik modele eklenir" / "Manuel eğitim gerektirir"); "Hiperparametreler": Learning Rate, Epoch Sayısı, Batch Size bugünkü sayı alanları olarak kalır, satırda etiket + kalın değer düzeninde. `FilledButton` "Ayarları Kaydet" (`save`). "Ses Profili" `SectionHeader` + `ResultTile` "Durum" + `OutlinedButton` "Ses Profilini Güncelle". Mesaj ve hata `ResultTile`. Yüklenirken ortada dönen gösterge. |
+| **Ayarlar** | `AppBar` "Model Ayarları"; turuncu vurgu. Bugünkü alanlar, Flutter biçiminde: turuncu model bilgi kartı (`ResultTile`, bugünkü "Model • WER • Veri" metni); `SectionHeader` "Model Tercihi" + `SegmentedButton` (sunucudaki değer listede yoksa — bugün `whisper` — sona eklenip seçili gösterilir; kaydedilen değer değişmez); "Fine-Tune Algoritması" + `SegmentedButton` (büyük harf); "Kendi Kendine Öğrenme" anahtarı (alt yazı "Yeni kayıtlar otomatik modele eklenir" / "Manuel eğitim gerektirir"); "Hiperparametreler": Learning Rate, Epoch Sayısı, Batch Size bugünkü sayı alanları olarak kalır, satırda etiket + kalın değer düzeninde. `FilledButton` "Ayarları Kaydet" (`save`). "Ses Profili" `SectionHeader` + `ResultTile` "Durum" + `OutlinedButton` "Ses Profilini Güncelle". Mesaj ve hata `ResultTile`. Yüklenirken ortada dönen gösterge. |
 
 - `offline.html` (APK içinde) aynı koyu tema renklerine getirilir (dış
   kaynak kullanmadan, satır içi stil).
@@ -87,6 +87,11 @@ görünür kalır, yalnızca `ResultTile` (kırmızı) ya da kırmızı metin ol
   - `groupByWord(takes)`: sırayı koruyarak kelimeye göre gruplama
     (Bekleyen Kayıtlar sayfasındaki satır içi gruplama buraya taşınır).
   - `formatClock(date)`: `SS:DD:ss`, sıfır dolgulu.
+  - `withCurrent(options, current)`: listede olmayan sunucu değeri sona eklenir.
+  - Ortak bileşenler ve altı sayfa `react-dom/server` ile render edilip
+    Flutter düzeninin işaretleri (geri bağlantısı, büyük düğmeler, segmentler,
+    `role="alert"`/`role="status"`, devre dışı düğmeler) denetlenir; yeni
+    kütüphane eklenmez.
 - **Görsel kontrol (Claude yapar):** `npm run build` sonrası yerel önizlemede
   Playwright ile 412×915 boyutunda altı sayfanın ekran görüntüsü; Flutter
   düzeniyle karşılaştırılır; yatay kaydırma olmadığı denetlenir. Kullanıcının
@@ -107,7 +112,7 @@ görünür kalır, yalnızca `ResultTile` (kırmızı) ya da kırmızı metin ol
 ## Kapsam Dışı
 
 - Flutter'da olup React'te olmayan davranışlar: hedef kartında cihazdaki
-  kaydı dinleme/silme, "Yenile" düğmesi, "Fine-Tune Başlat", model bilgi
-  kartı, hiperparametre kaydırıcıları. İstenirse ayrı iş.
+  kaydı dinleme/silme, "Yenile" düğmesi, "Fine-Tune Başlat",
+  hiperparametre kaydırıcıları. İstenirse ayrı iş.
 - Açık tema, Flutter uygulamasının kendisi, sunucu değişikliği.
 - `worktree-react-rewrite` dalını `master`'a merge etmek.
