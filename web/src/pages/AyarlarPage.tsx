@@ -9,9 +9,15 @@ import {
   type SettingsResponse,
   type VoiceProfileStatus,
 } from '../lib/api';
+import { withCurrent } from '../lib/uiFormat';
+import AppBar from '../components/AppBar';
+import { FilledButton, OutlinedButton, ResultTile, SectionHeader, SegmentedButton } from '../components/ui';
 
 const MODEL_OPTIONS = ['Furkan', 'base', 'large'];
 const ALGO_OPTIONS = ['lora', 'qlora', 'full'];
+
+// handleSave / handleRebuildVoiceProfile hata mesajlari bu kaliplarla baslar
+const isErrorMessage = (m: string) => m.startsWith('Hata:') || m.startsWith('Ses profili güncellenemedi');
 
 export default function AyarlarPage() {
   const [loading, setLoading] = useState(true);
@@ -81,103 +87,120 @@ export default function AyarlarPage() {
     }
   }
 
-  if (loading) return <p>Yükleniyor...</p>;
-  if (error) return <p role="alert">{error}</p>;
-  if (!settings) return null;
-
   return (
-    <main>
-      <h1>Ayarlar</h1>
-      {modelInfo && (
-        <p>
-          Model: {modelInfo.model} • WER: {modelInfo.wer} • Veri: {modelInfo.sample_count} ses
-        </p>
-      )}
+    <main className="page settings">
+      <AppBar title="Model Ayarları" backTo="/" />
+      <div className="page-body">
+        {loading ? (
+          <div className="spinner spinner--large" role="status" aria-label="Yükleniyor" />
+        ) : error ? (
+          <ResultTile label="Hata" value={error} tone="error" />
+        ) : settings ? (
+          <>
+            {modelInfo && (
+              <ResultTile
+                label="Model"
+                tone="settings"
+                value={`Model: ${modelInfo.model} • WER: ${modelInfo.wer} • Veri: ${modelInfo.sample_count} ses`}
+              />
+            )}
 
-      <label>
-        Model
-        <select
-          value={settings.model}
-          onChange={(e) => setSettings({ ...settings, model: e.target.value })}
-        >
-          {MODEL_OPTIONS.map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
-        </select>
-      </label>
+            <SectionHeader>Model Tercihi</SectionHeader>
+            <SegmentedButton
+              label="Model Tercihi"
+              className="segmented--settings"
+              options={withCurrent(MODEL_OPTIONS, settings.model).map((m) => ({ value: m, label: m }))}
+              value={settings.model}
+              onChange={(model) => setSettings({ ...settings, model })}
+            />
 
-      <label>
-        Algoritma
-        <select
-          value={settings.algorithm}
-          onChange={(e) => setSettings({ ...settings, algorithm: e.target.value })}
-        >
-          {ALGO_OPTIONS.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-      </label>
+            <SectionHeader>Fine-Tune Algoritması</SectionHeader>
+            <SegmentedButton
+              label="Fine-Tune Algoritması"
+              className="segmented--settings"
+              options={withCurrent(ALGO_OPTIONS, settings.algorithm).map((a) => ({ value: a, label: a.toUpperCase() }))}
+              value={settings.algorithm}
+              onChange={(algorithm) => setSettings({ ...settings, algorithm })}
+            />
 
-      <label>
-        <input
-          type="checkbox"
-          checked={settings.self_learning}
-          onChange={(e) => setSettings({ ...settings, self_learning: e.target.checked })}
-        />
-        Kendi kendine öğrenme
-      </label>
+            <SectionHeader>Kendi Kendine Öğrenme</SectionHeader>
+            <label className="switch-row">
+              <span style={{ flex: 1 }}>
+                Self-learning aktif
+                <br />
+                <span className="muted small">
+                  {settings.self_learning ? 'Yeni kayıtlar otomatik modele eklenir' : 'Manuel eğitim gerektirir'}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={settings.self_learning}
+                onChange={(e) => setSettings({ ...settings, self_learning: e.target.checked })}
+              />
+            </label>
 
-      <label>
-        Öğrenme oranı
-        <input
-          type="number"
-          step="0.00001"
-          value={settings.learning_rate}
-          onChange={(e) => setSettings({ ...settings, learning_rate: Number(e.target.value) })}
-        />
-      </label>
+            <SectionHeader>Hiperparametreler</SectionHeader>
+            <label className="field">
+              <span className="field-label">Learning Rate</span>
+              <input
+                type="number"
+                step="0.00001"
+                value={settings.learning_rate}
+                onChange={(e) => setSettings({ ...settings, learning_rate: Number(e.target.value) })}
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Epoch Sayısı</span>
+              <input
+                type="number"
+                value={settings.epochs}
+                onChange={(e) => setSettings({ ...settings, epochs: Number(e.target.value) })}
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Batch Size</span>
+              <input
+                type="number"
+                value={settings.batch_size}
+                onChange={(e) => setSettings({ ...settings, batch_size: Number(e.target.value) })}
+              />
+            </label>
 
-      <label>
-        Epoch
-        <input
-          type="number"
-          value={settings.epochs}
-          onChange={(e) => setSettings({ ...settings, epochs: Number(e.target.value) })}
-        />
-      </label>
+            <FilledButton
+              icon={saving ? 'hourglass_top' : 'save'}
+              className="button--settings"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? 'Kaydediliyor...' : 'Ayarları Kaydet'}
+            </FilledButton>
 
-      <label>
-        Batch size
-        <input
-          type="number"
-          value={settings.batch_size}
-          onChange={(e) => setSettings({ ...settings, batch_size: Number(e.target.value) })}
-        />
-      </label>
+            <SectionHeader>Ses Profili</SectionHeader>
+            <ResultTile
+              label="Durum"
+              tone="settings"
+              value={
+                voiceProfile
+                  ? voiceProfile.exists
+                    ? `${voiceProfile.sample_count} kayıttan oluşturuldu${voiceProfile.created_at ? ` • ${voiceProfile.created_at}` : ''}`
+                    : 'Henüz ses profili oluşturulmadı.'
+                  : 'Durum yükleniyor...'
+              }
+            />
+            <OutlinedButton
+              icon={voiceProfileBusy ? 'hourglass_top' : 'record_voice_over'}
+              className="button--settings"
+              onClick={handleRebuildVoiceProfile}
+              disabled={voiceProfileBusy}
+            >
+              {voiceProfileBusy ? 'Güncelleniyor...' : 'Ses Profilini Güncelle'}
+            </OutlinedButton>
 
-      <button onClick={handleSave} disabled={saving}>
-        {saving ? 'Kaydediliyor...' : 'Kaydet'}
-      </button>
-
-      <section>
-        <h2>Ses Profili</h2>
-        <p>
-          {voiceProfile
-            ? voiceProfile.exists
-              ? `${voiceProfile.sample_count} kayıttan oluşturuldu${voiceProfile.created_at ? ` • ${voiceProfile.created_at}` : ''}`
-              : 'Henüz ses profili oluşturulmadı.'
-            : 'Durum yükleniyor...'}
-        </p>
-        <button onClick={handleRebuildVoiceProfile} disabled={voiceProfileBusy}>
-          {voiceProfileBusy ? 'Güncelleniyor...' : 'Ses Profilini Güncelle'}
-        </button>
-      </section>
-
-      {message && <p>{message}</p>}
+            {message && <ResultTile label="Durum" value={message} tone={isErrorMessage(message) ? 'error' : 'settings'} />}
+          </>
+        ) : null}
+      </div>
     </main>
   );
 }
