@@ -7,7 +7,7 @@ Her cümle kaydı için iki çıktı karşılaştırılır:
   düzeltilmiş : ham + SentenceCorrector (Furkan'ın gördüğü cümle)
 
 Kullanım:
-    python -m src.cli.evaluate_sentences --user FurkanV1 [--device cpu]
+    python -m src.cli.evaluate_sentences --user FurkanV1 [--model <klasör adı>] [--device cpu]
 """
 import argparse
 import csv
@@ -112,11 +112,13 @@ def worst(rows: List[Dict], n: int = 10) -> List[Dict]:
     return sorted(rows, key=lambda r: (r["raw_wer"], r["corrected_wer"]), reverse=True)[:n]
 
 
-def write_report(report: Dict, reports_dir: Path, now: Optional[datetime] = None) -> Path:
+def write_report(
+    report: Dict, reports_dir: Path, now: Optional[datetime] = None, prefix: str = "sentence_eval"
+) -> Path:
     now = now or datetime.now()
     reports_dir = Path(reports_dir)
     reports_dir.mkdir(parents=True, exist_ok=True)
-    out = reports_dir / f"sentence_eval_{now.strftime('%Y%m%d-%H%M%S')}.json"
+    out = reports_dir / f"{prefix}_{now.strftime('%Y%m%d-%H%M%S')}.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return out
 
@@ -140,21 +142,33 @@ def print_summary(report: Dict) -> None:
         print(f"\nAtlanan kayıt: {len(report['skipped'])}")
 
 
-def _load_asr(user_id: str):
+def model_key(user_id: str, settings_model: Optional[str], model_name: Optional[str] = None) -> str:
+    """Ölçülecek model klasörünün adı; --model verilmezse api.get_asr ile aynı seçim."""
+    if model_name:
+        return model_name
+    return f"{user_id}_whisper" if settings_model == "whisper" else user_id
+
+
+def _load_asr(user_id: str, model_name: Optional[str] = None):
     # Ağır importlar (transformers, peft) yalnızca gerçek ölçümde yüklenir
     from src.core.asr import ASRSystem
     from src.services.model_service import ModelService
     from src.services.settings_service import SettingsService
 
-    # api.get_asr ile aynı seçim: ayar "whisper" ise Whisper adaptörü
     settings = SettingsService().load_settings(user_id)
-    model_key = f"{user_id}_whisper" if settings.get("model") == "whisper" else user_id
-    return ASRSystem(model_name=ModelService.find_personalized_model(model_key), user_id=user_id)
+    key = model_key(user_id, settings.get("model"), model_name)
+    model_path = ModelService.find_personalized_model(key)
+    if model_path is None:
+        raise SystemExit(f"Model bulunamadı: {key}")
+    # user_id sözlüğü (metadata_words.csv) seçer; model klasöründen bağımsız
+    return ASRSystem(model_name=model_path, user_id=user_id)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Cümle kayıtlarında ASR doğruluğunu ölçer.")
     parser.add_argument("--user", default="FurkanV1")
+    parser.add_argument("--model", default=None,
+                        help="data/models/personalized_models altındaki klasör adı (varsayılan: canlı model)")
     parser.add_argument("--device", choices=["auto", "cpu"], default="auto",
                         help="cpu: API GPU'yu kullanırken bellek yetmezse")
     args = parser.parse_args(argv)
@@ -170,7 +184,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     from src.core.sentence_corrector import SentenceCorrector
 
-    asr = _load_asr(args.user)
+    asr = _load_asr(args.user, args.model)
     corrector = SentenceCorrector(asr.user_vocabulary, Path(config.LEXICON_PATH))
     report = evaluate(
         rows,
@@ -179,6 +193,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     report["user_id"] = args.user
     report["model_type"] = asr.model_type
+    report["model"] = args.model
 
     print_summary(report)
     out = write_report(report, Path(config.REPORTS_DIR))

@@ -133,3 +133,18 @@ def test_main_without_recordings_exits_with_1(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(ev.config, "BASE_PATH", str(tmp_path))
     assert ev.main(["--user", "Yok"]) == 1
     assert "Cümle kaydı yok" in capsys.readouterr().out
+
+
+def test_model_key_defaults_to_the_live_model_choice():
+    assert ev.model_key("FurkanV1", "whisper") == "FurkanV1_whisper"
+    assert ev.model_key("FurkanV1", "wav2vec2") == "FurkanV1"
+    assert ev.model_key("FurkanV1", None) == "FurkanV1"
+
+
+def test_model_key_uses_the_given_model_folder():
+    assert ev.model_key("FurkanV1", "whisper", "FurkanV1_whisper_cumle") == "FurkanV1_whisper_cumle"
+
+
+def test_write_report_accepts_a_prefix(tmp_path):
+    out = ev.write_report({}, tmp_path, now=datetime(2026, 10, 22, 1, 2, 3), prefix="synthetic_eval")
+    assert out == tmp_path / "synthetic_eval_20261022-010203.json"

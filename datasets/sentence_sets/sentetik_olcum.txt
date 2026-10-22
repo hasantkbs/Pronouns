@@ -1,0 +1,167 @@
+Hemşire ilaç verdi.
+Çocuk kitap okudu.
+Kedi bahçe kapı gördü.
+Arkadaş kahve istedi.
+O okul gitti.
+Polis kaza gördü.
+Biz park gitti.
+Köpek kapı baktı.
+Çocuk dondurma istiyor.
+Doğru cevap verdi.
+Ben kahve istiyor.
+O film izleme sevdi.
+İki kedi bahçe oyun yaptı.
+Yeni bilgisayar çok pahalı.
+Eski ev çok soğuk.
+Mavi kapı açık.
+Beyaz kedi yatak uyku.
+Deniz çok sıcak.
+Orman çok yeşil.
+Kahve çok sıcak.
+Su çok soğuk.
+Makarna çok iyi oldu.
+Pilav ve et yedi.
+Domates ve biber aldı.
+Patates ve soğan aldı.
+Peynir ve ekmek yedi.
+Kiraz ve üzüm tatlı.
+Muz ve portakal aldı.
+Karpuz ve kavun yedi.
+Elektrik hemen geldi.
+Hastane çok yakın.
+Okul çok uzak.
+Mağaza indirim yaptı.
+Firma yeni ürün yaptı.
+Şirket yeni plan yaptı.
+Müşteri şikayet etti.
+Satıcı fiyat söyledi.
+Lider karar verdi.
+Hükümet yeni kanun yaptı.
+Devlet vergi aldı.
+Çocuk resim yaptı.
+Ben iyi hissetti.
+Sen nerede kaldı.
+Siz ne istiyor.
+Hangi kitap okudu.
+Kapı açık mı.
+Su sıcak mı.
+Ağustos çok sıcak.
+Ocak çok soğuk.
+Mart yağmur çok.
+Pazartesi okul başladı.
+Cuma park gitti.
+Cumartesi pazar gitti.
+Perşembe hastane gitti.
+Saat sekiz oldu.
+Beş kitap okudu.
+Dört kedi gördü.
+İki kahve istedi.
+Altı gün sürdü.
+Dokuz saat çalıştı.
+Yedi gün gezi yaptı.
+Bin kişi geldi.
+Bilgisayar sistem çalıştı.
+Yeni yazılım test etti.
+Site güvenlik iyi.
+Veri analiz yaptı.
+Grafik çok basit.
+Video çok kısa.
+Ses çok yüksek.
+Işık çok az.
+Sarı çiçek gördü.
+Mor çiçek sevdi.
+Turuncu kedi gördü.
+Gri bulut geldi.
+Yeşil çim gördü.
+Kuş ağaç gördü.
+Kaplan çok hızlı.
+Maymun muz yedi.
+İnek çim yedi.
+Keçi yaprak yedi.
+Ayı orman gitti.
+Kurt köy geldi.
+Fil çok büyük.
+Kaplumbağa çok yavaş.
+Yılan çim gitti.
+Böcek yaprak yedi.
+At tarla gitti.
+Çiftlik çok büyük.
+Köy çok küçük.
+Şehir çok büyük.
+Sokak çok uzun.
+Cadde çok kısa.
+Apartman çok eski.
+Daire çok küçük.
+Oda çok sıcak.
+Banyo çok küçük.
+Salon çok büyük.
+Bahçe çok yeşil.
+Garaj kapı açık.
+Merdiven çok uzun.
+Tedavi uzun sürdü.
+Spor yapmak iyi.
+Stres çok kötü.
+Hemşire hemen geldi.
+Çocuk çok ağlamak istiyor.
+Arkadaş hastane gitti.
+Kedi süre bekledi.
+Sen ne düşündü.
+O çok iyi insan.
+Ben yeni bilgi öğrendi.
+Çocuk yeni kitap aldı.
+Maymun ağaç gitti.
+Kuş çok hızlı uçmak istiyor.
+Köpek çok hızlı gitti.
+Kedi uyku istiyor.
+Herkes erken geldi.
+Hemşire ilaç ve su verdi.
+Polis yardım etti.
+Arkadaş yardım istedi.
+Müşteri yeni ürün istedi.
+Firma reklam yaptı.
+Şirket yeni site yaptı.
+Satıcı indirim yaptı.
+Banka kredi verdi.
+Vergi çok yüksek.
+Fiyat çok yüksek.
+Su çok ucuz.
+Hedef çok yüksek.
+Karar çok zor.
+Sorun hemen çözüm buldu.
+Plan çok basit.
+Fikir çok iyi.
+Sonuç çok iyi oldu.
+Deneme çok kötü oldu.
+Başarı çok zor.
+Çocuk okul başladı.
+Kitap çok uzun.
+Film çok uzun sürdü.
+Oyun çok kısa sürdü.
+Müzik çok yüksek.
+Ses çok az.
+Gök çok mavi.
+Bulut çok gri.
+Yıldız çok az.
+Nehir çok uzun.
+Dağ çok yüksek.
+Göl çok soğuk.
+Deniz çok mavi.
+Ağaç çok büyük.
+Yaprak çok sarı.
+Bitki çok küçük.
+Çilek çok tatlı.
+Armut çok sert.
+Ceviz ve fındık aldı.
+Zeytin ve peynir yedi.
+Havuç ve marul aldı.
+Lahana ve karnabahar aldı.
+Brokoli çok iyi.
+Bisküvi ve kek yedi.
+Dondurma çok soğuk.
+Çorba çok sıcak.
+Yemek çok iyi oldu.
+Et ve pilav yedi.
+Büyük fırtına geldi.
+Büyük deprem oldu.
+Orman yangın oldu.
+Cadde kaza oldu.
