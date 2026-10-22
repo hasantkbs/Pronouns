@@ -59,15 +59,17 @@ UTF-8, boş satır yok):
 | `sentetik_olcum.txt` | ~150 cümle |
 | `sentetik_egitim.txt` | ~1000 cümle |
 
-- Her cümle 3–7 kelime; her kelimesi FurkanV1 sözlüğünde
-  (`metadata_words.csv` transkripsiyonları) **birebir** var. Karşılaştırma
+- Her cümle 3–7 kelime. Ölçüm cümlelerinin her kelimesinin `eval.csv`'de,
+  eğitim cümlelerinin her kelimesinin `train.csv`'de **tek başına** kaydı
+  var (bu kayıtların hepsi `metadata_words.csv`'den bölündüğü için
+  sözlükte de var; `metadata_words.csv` canlıda değiştiği için test ona
+  değil, sesin gerçekten alındığı bölüme bakar). Karşılaştırma
   `normalize_turkish_text` ile (Türkçe küçük harf, noktalama silinmiş).
 - İki dosya arasında ortak cümle yok; ikisinde de `olcum_*.txt`
   cümlelerinden hiçbiri yok (o cümleler gerçek kayıt doğrulamasına ayrılır).
 - Dosya içinde tekrar eden cümle yok.
-- Bu kurallar `tests/test_synthetic_sentence_sets.py` ile denetlenir.
-  Testin sözlüğü sabit bir kopyadan değil, `metadata_words.csv`'den okunur;
-  dosya yoksa test atlanır.
+- Bu kurallar `tests/test_synthetic_sentence_sets.py` ile denetlenir;
+  `train.csv`/`eval.csv` yoksa kapsama testleri atlanır.
 - Dosya adı `olcum_` ile başlamadığı için `/collect/word-sets?kind=sentence`
   bunları listelemez (Kayıt ekranı değişmez).
 
@@ -154,8 +156,13 @@ göre seçilir (`metric_for_best_model="wer"` aynı).
 eğitimi (sıfırdan, canlı klasöre) cümleleri otomatik ekler. Bu eğitim
 yaklaşık %30 uzar.
 
-**Rapor:** eğitim raporuna `init_from`, `output_name`,
-`sentence_train_samples`, `synthetic_eval_samples` eklenir.
+**Rapor:** eğitim verisine `init_from`, `output_name`,
+`sentence_train_samples`, `synthetic_eval_samples` eklenir. `--output-name`
+verilen eğitimin raporu `reports/whisper_side_<ad>_<zaman>.json`'a (tüm
+alanlarla) yazılır, `training_<user>_*.json`'a yazılmaz: aksi halde
+`TrainingService.get_last_wer` (Ayarlar'daki model kartı) canlı olmayan
+modelin WER'ini gösterirdi. Varsayılan (self-learning) eğitim raporu bugünkü
+gibi `ReportingService` ile yazılır.
 
 **Çalıştırma (Claude):**
 
