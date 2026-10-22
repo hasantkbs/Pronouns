@@ -1,0 +1,1004 @@
+Doktor muayene yaptı.
+Doktor hemen geldi.
+Doktor soru sordu.
+Doktor tedavi başladı.
+Doktor çok iyi insan.
+Hemşire aşı yaptı.
+Hemşire yardım etti.
+Hemşire doktor gibi çalıştı.
+Hemşire hastane çalıştı.
+Çocuk elma yedi.
+Çocuk yumurta yedi.
+Çocuk çikolata istedi.
+Çocuk pasta yedi.
+Çocuk okul gitti.
+Çocuk park gitti.
+Çocuk resim çizmek istiyor.
+Çocuk çok hızlı koşmak istiyor.
+Çocuk erken uyumak istiyor.
+Çocuk kitap okumak istiyor.
+Çocuk soru sordu.
+Çocuk cevap verdi.
+Çocuk yeni oyun öğrendi.
+Çocuk iki elma aldı.
+Çocuk üç kitap okudu.
+Kedi süt istedi.
+Kedi fare gördü.
+Kedi bahçe gitti.
+Kedi kapı bekledi.
+Kedi kuş baktı.
+Köpek kedi gördü.
+Köpek bahçe gitti.
+Köpek kapı bekledi.
+Köpek çok hızlı koşmak istiyor.
+Köpek yemek istiyor.
+Köpek su istiyor.
+Kuş ağaç gitti.
+Kuş çok yüksek uçmak istiyor.
+Kuş tohum yedi.
+Tavuk yumurta verdi.
+Tavuk tohum yedi.
+İnek süt verdi.
+Koyun çim yedi.
+Keçi çim yedi.
+Ördek göl gitti.
+Kaz göl gitti.
+Aslan et yedi.
+Kaplan et yedi.
+Timsah nehir bekledi.
+Fare peynir yedi.
+Sıçan bodrum gitti.
+Ayı balık yedi.
+Fil su istedi.
+Kurt koyun gördü.
+Tilki tavuk gördü.
+Yılan taş gitti.
+Kaplumbağa çok yavaş gitti.
+Arkadaş telefon etti.
+Arkadaş ev geldi.
+Arkadaş çay istedi.
+Arkadaş yardım etti.
+Arkadaş haber verdi.
+Arkadaş geç geldi.
+Komşu kapı geldi.
+Komşu yardım etti.
+Komşu çay verdi.
+Komşu börek yaptı.
+Komşu çok iyi insan.
+Akraba ev geldi.
+Akraba telefon etti.
+Dost çok önemli.
+Dost yardım etti.
+Kadın kitap okudu.
+Kadın çay istedi.
+Kadın çorba yaptı.
+Kadın pazar gitti.
+Erkek kahve istedi.
+Erkek iş gitti.
+Erkek park gitti.
+İnsan çok çalıştı.
+Herkes çok çalıştı.
+Herkes yemek yedi.
+Biri kapı geldi.
+Onlar park gitti.
+Onlar yemek yedi.
+Onlar çok çalıştı.
+Biz okul gitti.
+Biz yeni ev aldı.
+Biz deniz gitti.
+Siz nerede kaldı.
+Siz ne yaptı.
+Sen ne istiyor.
+Sen ne dedi.
+Sen çok iyi insan.
+Ben su istiyor.
+Ben çay istiyor.
+Ben süt istiyor.
+Ben ekmek istiyor.
+Ben yardım istiyor.
+Ben doktor gitmek istiyor.
+Ben ev gitmek istiyor.
+Ben uyumak istiyor.
+Ben konuşmak istiyor.
+Ben okumak istiyor.
+Ben yemek istiyor.
+Ben dinlenme istiyor.
+Ben kötü hissetti.
+O hemen gitti.
+O soru sordu.
+O cevap verdi.
+O iş bitirdi.
+O yeni şey öğrendi.
+O telefon aldı.
+Süt çok soğuk.
+Süt çok sıcak.
+Çay çok sıcak.
+Çay çok soğuk.
+Kahve çok soğuk.
+Ayran çok soğuk.
+Su çok sıcak.
+Yoğurt çok iyi.
+Yumurta çok sıcak.
+Elma çok tatlı.
+Elma ve armut aldı.
+Kayısı çok tatlı.
+Şeftali çok tatlı.
+İncir çok tatlı.
+Hurma çok tatlı.
+Muz çok tatlı.
+Karpuz çok tatlı.
+Kavun çok tatlı.
+Üzüm çok tatlı.
+Portakal çok tatlı.
+Çikolata çok tatlı.
+Pasta çok tatlı.
+Kek çok tatlı.
+Salata çok iyi.
+Ispanak çok iyi.
+Sarımsak çok sert.
+Soğan çok sert.
+Tavuk ve pilav yedi.
+Balık ve salata yedi.
+Süt ve yumurta aldı.
+Elma ve muz aldı.
+Çay ve kek istedi.
+Kahve ve su istedi.
+Yoğurt ve ayran aldı.
+Badem ve fıstık aldı.
+Patates ve havuç aldı.
+Domates ve salatalık aldı.
+Marul ve ıspanak aldı.
+Makarna ve salata yedi.
+Çorba ve ekmek yedi.
+Börek ve çay istedi.
+Hava çok sıcak.
+Hava çok iyi.
+Hava çok kötü.
+Güneş çok sıcak.
+Rüzgar çok sert.
+Kar çok soğuk.
+Yağmur çok sert.
+Fırtına çok sert.
+Bulut çok siyah.
+Gök çok siyah.
+Güneş çok yüksek.
+Ateş çok sıcak.
+Toprak çok sıcak.
+Taş çok sert.
+Deniz çok soğuk.
+Göl çok sıcak.
+Nehir çok hızlı.
+Orman çok büyük.
+Dağ çok soğuk.
+Şimdi kar başladı.
+Şimdi yağmur başladı.
+Sonra güneş geldi.
+Sonra hava soğuk oldu.
+Kasım çok soğuk.
+Aralık çok soğuk.
+Şubat çok soğuk.
+Temmuz çok sıcak.
+Haziran çok sıcak.
+Mayıs çok iyi.
+Nisan yağmur çok.
+Eylül okul başladı.
+Ekim çok iyi.
+Salı okul gitti.
+Pazar ev kaldı.
+Pazartesi iş başladı.
+Cuma erken geldi.
+Cumartesi deniz gitti.
+Çarşamba doktor gitti.
+Perşembe pazar gitti.
+Saat dokuz oldu.
+Saat on oldu.
+Saat yedi oldu.
+Zaman çok hızlı geçmek.
+Zaman çok önemli.
+Telefon çok pahalı.
+Telefon çok eski.
+Telefon ekran büyük.
+Yeni telefon aldı.
+İnternet çok yavaş.
+İnternet çok hızlı.
+Bilgisayar çok yavaş.
+Bilgisayar çok hızlı.
+Bilgisayar yeni aldı.
+Program çok yavaş.
+Yeni program yazdı.
+Algoritma çok basit.
+Algoritma çok karmaşık.
+Kod çok uzun.
+Kod çok kısa.
+Sistem çok yavaş.
+Sistem çok hızlı.
+Rapor çok uzun.
+Metin çok uzun.
+Dosya silmek istiyor.
+Klasör çok büyük.
+Şifre çok zor.
+Şifre çok kolay.
+Ekran çok büyük.
+Ekran çok küçük.
+Video çok uzun.
+Müzik dinlemek istiyor.
+Kitap okumak istiyor.
+Resim çizmek istiyor.
+Spor yapmak istiyor.
+Egzersiz yapmak istiyor.
+Yüzmek çok iyi.
+Koşmak çok iyi.
+Okumak çok önemli.
+Uyumak çok önemli.
+Uyku çok önemli.
+Sağlık çok önemli.
+Aile çok önemli.
+Eğitim çok önemli.
+Sevgi çok önemli.
+Güven çok önemli.
+Zaman çok önemli değer.
+Sağlık en önemli.
+Aile en önemli.
+Çocuk yatak yatmak istiyor.
+Çocuk bahçe yürümek istiyor.
+Çocuk çok zıplamak istiyor.
+Çocuk çok gülmek istiyor.
+Çocuk müzik dinlemek istiyor.
+Çocuk beş elma saydı.
+Çocuk kağıt kesmek istiyor.
+Çocuk resim boyamak istiyor.
+Çocuk kağıt yapıştırmak istiyor.
+Çocuk çiçek dikmek istiyor.
+Çocuk ağaç dikmek istiyor.
+Çocuk okul kalmak istiyor.
+Çocuk ev kalmak istiyor.
+Çocuk çok konuştu.
+Çocuk az konuştu.
+Çocuk çok yemek yedi.
+Çocuk çok su istedi.
+Çocuk soğuk su istedi.
+Çocuk sıcak süt istedi.
+Çocuk hastane kaldı.
+Çocuk çok korku hissetti.
+Çocuk çok mutluluk hissetti.
+Ben çok mutluluk hissetti.
+Ben çok korku hissetti.
+Ben çok stres hissetti.
+Ben ağrı hissetti.
+Ben baş ağrı hissetti.
+Ben çok çalıştı.
+Ben iş bitirdi.
+Ben yeni iş buldu.
+Ben yeni ev buldu.
+Ben telefon kaybetti.
+Ben para kaybetti.
+Ben şifre kaybetti.
+Ben oyun kazandı.
+Ben kitap aldı.
+Ben ekmek aldı.
+Ben su aldı.
+Ben süt aldı.
+Ben yeni telefon aldı.
+Ben haber duydu.
+Ben ses duydu.
+Ben kuş gördü.
+Ben deniz gördü.
+Ben çok düşündü.
+Ben sonra düşündü.
+Ben karar verdi.
+Ben cevap verdi.
+Ben soru sordu.
+Ben rapor yazdı.
+Ben kod yazdı.
+Ben program yazdı.
+Ben yeni dil öğrendi.
+Ben çok şey öğrendi.
+Ben çok şey yaşadı.
+Ben çok şey gördü.
+Ben şimdi geldi.
+Ben sonra geldi.
+Ben erken geldi.
+Ben geç kaldı.
+Ben ev kaldı.
+Ben doktor konuştu.
+Ben arkadaş konuştu.
+Ben telefon konuştu.
+Ben bilgisayar kullandı.
+Ben ilaç kullandı.
+Ben yeni ilaç kullandı.
+Ben çok iyi anladı.
+Ben hiç anladı mı.
+Sen ne gördü.
+Sen ne duydu.
+Sen ne aldı.
+Sen ne yedi.
+Sen ne yaptı.
+Sen ne söyledi.
+Sen ne öğrendi.
+Sen nerede çalıştı.
+Sen nerede yaşadı.
+Sen nasıl hissetti.
+Sen neden geldi.
+Sen neden gitti.
+Sen neden kaldı.
+Sen kim gördü.
+Sen hangi kitap okudu.
+Sen hangi renk sevdi.
+Sen çay istiyor mu.
+Sen kahve istiyor mu.
+Sen su istiyor mu.
+Sen yardım istiyor mu.
+O çok iyi doktor.
+O çok iyi arkadaş.
+O çok iyi komşu.
+O çok iyi öğretti.
+O çok şey öğretti.
+O hemen anladı.
+O çok iyi bildi.
+O cevap bildi.
+O çözüm buldu.
+O sorun çözmek istiyor.
+O çok uzak yaşadı.
+O köy yaşadı.
+O şehir yaşadı.
+O deniz gitti.
+O dağ gitti.
+O orman gitti.
+O hastane gitti.
+O banka gitti.
+O mağaza gitti.
+O pazar gitti.
+O ofis gitti.
+O fabrika çalıştı.
+O şirket çalıştı.
+O banka çalıştı.
+O hastane çalıştı.
+O okul çalıştı.
+O ofis çalıştı.
+O çiftlik çalıştı.
+O tarla çalıştı.
+O inşaat çalıştı.
+Biz çok çalıştı.
+Biz yemek yedi.
+Biz çay istedi.
+Biz deniz gördü.
+Biz yeni şehir gördü.
+Biz gezi yaptı.
+Biz plan yaptı.
+Biz karar verdi.
+Biz oyun kazandı.
+Biz oyun kaybetti.
+Biz erken geldi.
+Biz geç kaldı.
+Biz ev kaldı.
+Biz köy gitti.
+Biz dağ gitti.
+Biz orman gitti.
+Biz çiftlik gitti.
+Siz nerede yaşadı.
+Siz ne düşündü.
+Siz ne öğrendi.
+Siz çok iyi insan.
+Onlar çok iyi insan.
+Onlar oyun kazandı.
+Onlar ev aldı.
+Onlar yeni ev buldu.
+Onlar köy yaşadı.
+Onlar şehir gitti.
+Onlar erken geldi.
+Onlar geç kaldı.
+Onlar soru sordu.
+Onlar cevap verdi.
+Onlar karar verdi.
+Herkes karar verdi.
+Herkes cevap bildi.
+Herkes haber duydu.
+Herkes yardım etti.
+Herkes çay istedi.
+Kimse cevap bildi mi.
+Kim kapı geldi.
+Kim süt aldı.
+Kim kitap aldı.
+Kim pasta yedi.
+Kim oyun kazandı.
+Ne zaman geldi.
+Ne zaman gitti.
+Ne zaman başladı.
+Neden ağlamak istiyor.
+Neden geç kaldı.
+Neden erken gitti.
+Hangi gün geldi.
+Hangi saat geldi.
+Hangi renk sevdi.
+Hangi oda kaldı.
+Doktor ne dedi.
+Doktor ilaç yazdı.
+Doktor ameliyat yaptı.
+Doktor çok yardım etti.
+Doktor test yaptı.
+Doktor sonuç söyledi.
+Doktor diyet verdi.
+Doktor dinlenme dedi.
+Doktor egzersiz dedi.
+Hemşire su verdi.
+Hemşire ateş baktı.
+Ağrı çok az.
+Ağrı çok fazla.
+Ateş çok yüksek.
+Ateş çok düşük.
+Basınç çok yüksek.
+Basınç çok düşük.
+Tedavi çok iyi oldu.
+Ameliyat çok uzun sürdü.
+Ameliyat çok kısa sürdü.
+Muayene çok kısa sürdü.
+Hastane çok büyük.
+Enfeksiyon çok kötü.
+Virüs çok hızlı.
+Bakteri çok küçük.
+Bağışıklık çok önemli.
+Hastalık çok uzun sürdü.
+İlaç çok pahalı.
+İlaç çok iyi.
+Aşı çok önemli.
+Beslenme çok önemli.
+Spor çok önemli.
+Egzersiz çok önemli.
+Dinlenme çok önemli.
+Uyku çok az.
+Uyku çok fazla.
+Stres çok fazla.
+Stres çok az.
+Ev çok büyük.
+Ev çok küçük.
+Ev çok sıcak.
+Ev çok eski.
+Ev çok yeni.
+Ev çok uzak.
+Ev çok yakın.
+Ev çok pahalı.
+Ev çok ucuz.
+Yeni ev çok büyük.
+Eski ev çok küçük.
+Oda çok soğuk.
+Oda çok büyük.
+Oda çok küçük.
+Mutfak çok küçük.
+Mutfak çok büyük.
+Mutfak çok sıcak.
+Banyo çok soğuk.
+Banyo çok büyük.
+Salon çok küçük.
+Salon çok sıcak.
+Balkon çok küçük.
+Balkon çok büyük.
+Bahçe çok büyük.
+Bahçe çok küçük.
+Bahçe çiçek çok.
+Garaj çok büyük.
+Bodrum çok soğuk.
+Çatı çok yüksek.
+Tavan çok yüksek.
+Duvar çok eski.
+Zemin çok soğuk.
+Zemin çok sıcak.
+Kapı çok eski.
+Kapı çok büyük.
+Kapı açık kaldı.
+Pencere açık kaldı.
+Pencere çok büyük.
+Pencere çok küçük.
+Merdiven çok yüksek.
+Asansör çok yavaş.
+Asansör çok hızlı.
+Asansör çalıştı mı.
+Yatak çok büyük.
+Yatak çok küçük.
+Yatak çok sert.
+Yatak çok yumuşak.
+Temizlik çok önemli.
+Temizlik yapmak istiyor.
+Ev temizlik yaptı.
+Oda temizlik yaptı.
+Mutfak temizlik yaptı.
+Apartman çok yüksek.
+Apartman çok yeni.
+Daire çok büyük.
+Daire çok pahalı.
+Villa çok pahalı.
+Villa çok büyük.
+Mahalle çok eski.
+Mahalle çok yeni.
+Sokak çok kısa.
+Cadde çok uzun.
+Şehir çok küçük.
+Şehir çok eski.
+Köy çok büyük.
+Köy çok uzak.
+Park çok büyük.
+Park çok küçük.
+Park çok yakın.
+Park çok uzak.
+Okul çok yakın.
+Okul çok büyük.
+Okul çok küçük.
+Okul çok eski.
+Okul çok yeni.
+Banka çok yakın.
+Banka çok uzak.
+Mağaza çok yakın.
+Mağaza çok büyük.
+Mağaza çok pahalı.
+Mağaza çok ucuz.
+Pazar çok ucuz.
+Fabrika çok büyük.
+Fabrika çok eski.
+Ofis çok büyük.
+Ofis çok küçük.
+Ofis çok soğuk.
+Ofis çok sıcak.
+Ofis çok yakın.
+Ofis çok uzak.
+İş çok zor.
+İş çok kolay.
+İş çok fazla.
+İş çok az.
+İş çok önemli.
+Görev çok zor.
+Görev çok kolay.
+Plan çok iyi.
+Plan çok kötü.
+Plan çok zor.
+Plan çok kolay.
+Strateji çok iyi.
+Strateji çok kötü.
+Taktik çok iyi.
+Hedef çok zor.
+Hedef çok önemli.
+Karar çok önemli.
+Karar çok kolay.
+Fikir çok kötü.
+Fikir çok yeni.
+Fikir çok basit.
+Öneri çok iyi.
+Öneri çok kötü.
+Yorum çok uzun.
+Yorum çok kısa.
+Yorum çok iyi.
+Şikayet çok fazla.
+Şikayet çok az.
+Sorun çok büyük.
+Sorun çok küçük.
+Sorun çok zor.
+Sorun çok basit.
+Çözüm çok basit.
+Çözüm çok zor.
+Çözüm çok iyi.
+Sonuç çok kötü oldu.
+Sonuç çok önemli.
+Başarı çok önemli.
+Başarı çok iyi.
+Hata çok büyük.
+Hata çok küçük.
+Hata çok önemli.
+Risk çok yüksek.
+Risk çok düşük.
+Risk çok büyük.
+Fırsat çok iyi.
+Fırsat çok büyük.
+Avantaj çok büyük.
+Dezavantaj çok büyük.
+Fayda çok büyük.
+Zarar çok büyük.
+Zarar çok az.
+Fark çok büyük.
+Fark çok az.
+Değer çok yüksek.
+Değer çok düşük.
+Kalite çok iyi.
+Kalite çok kötü.
+Kalite çok yüksek.
+Kalite çok düşük.
+Fiyat çok düşük.
+Fiyat çok iyi.
+Fiyat çok pahalı gibi.
+Para çok az.
+Para çok fazla.
+Para çok önemli.
+Bütçe çok az.
+Bütçe çok büyük.
+Borç çok fazla.
+Borç çok az.
+Kredi çok pahalı.
+Vergi çok fazla.
+Vergi çok az.
+Zam çok az.
+Zam çok fazla.
+İndirim çok iyi.
+İndirim çok az.
+Kampanya çok iyi.
+Reklam çok uzun.
+Reklam çok fazla.
+Marka çok pahalı.
+Marka çok iyi.
+Ürün çok iyi.
+Ürün çok kötü.
+Ürün çok pahalı.
+Ürün çok ucuz.
+Müşteri çok fazla.
+Müşteri çok az.
+Satıcı çok iyi insan.
+Satıcı yardım etti.
+Firma çok büyük.
+Firma çok küçük.
+Şirket çok büyük.
+Şirket çok küçük.
+Şirket çok eski.
+Şirket çok yeni.
+Şirket para kazandı.
+Şirket para kaybetti.
+Şirket yeni ürün yaptı.
+Şirket yeni ofis aldı.
+Ekonomi çok iyi.
+Ekonomi çok kötü.
+Piyasa çok iyi.
+Piyasa çok kötü.
+Ticaret çok önemli.
+Tarım çok önemli.
+Üretim çok fazla.
+Üretim çok az.
+Tüketim çok fazla.
+Tüketim çok az.
+Yatırım çok önemli.
+Yatırım çok iyi.
+Sigorta çok pahalı.
+Sigorta çok önemli.
+Gelir çok az.
+Gelir çok fazla.
+Gider çok fazla.
+Gider çok az.
+Hesap çok kolay.
+Hesap çok zor.
+Nakit para yok.
+Yeni hesap açmak istiyor.
+Banka hesap açmak istiyor.
+Ben su istiyor çünkü hava çok sıcak.
+Ben çay istiyor çünkü hava çok soğuk.
+Çocuk uyumak istiyor çünkü çok geç.
+Ben doktor gitti çünkü ağrı çok fazla.
+O erken gitti çünkü iş çok fazla.
+Biz ev kaldı çünkü yağmur çok sert.
+Biz park gitti çünkü hava çok iyi.
+O çok çalıştı ama sonuç kötü oldu.
+Ben çok düşündü ama karar vermek zor.
+Ev çok büyük ama çok pahalı.
+Telefon çok yeni ama çok yavaş.
+Kahve çok sıcak ama çok iyi.
+Yemek çok iyi ama çok az.
+Okul çok uzak ama çok iyi.
+İş çok zor ama çok önemli.
+Ben ve arkadaş park gitti.
+Ben ve komşu çay istedi.
+Doktor ve hemşire hastane çalıştı.
+Ben kahve ve kek istiyor.
+Ben ekmek ve süt aldı.
+Ben elma ve armut sevdi.
+Ben kedi ve köpek sevdi.
+Ben müzik ve film sevdi.
+Ben yeni telefon ve bilgisayar aldı.
+Çocuk için süt aldı.
+Çocuk için yeni kitap aldı.
+Çocuk için oyun aldı.
+Aile için yemek yaptı.
+Aile için çok çalıştı.
+Sağlık için spor yapmak önemli.
+Sağlık için uyku çok önemli.
+Sağlık için su çok önemli.
+Sağlık için egzersiz yapmak iyi.
+Başarı için çok çalışmak önemli.
+Okul için erken uyanmak önemli.
+İş için yeni bilgisayar aldı.
+Ben şimdi uyumak istiyor.
+Ben şimdi yemek istiyor.
+Ben şimdi ev gitmek istiyor.
+Ben şimdi doktor gitmek istiyor.
+Ben şimdi su istiyor.
+Ben şimdi çay istiyor.
+Ben şimdi oturmak istiyor.
+Ben şimdi dinlenme istiyor.
+Ben sonra konuşmak istiyor.
+Ben sonra okumak istiyor.
+Şimdi ne yapmak istiyor.
+Şimdi nerede kalmak istiyor.
+Sonra ne oldu.
+Sonra ne yaptı.
+Sonra nerede kaldı.
+Önce kahve sonra iş.
+Önce yemek sonra spor.
+Önce doktor sonra ev.
+Önce düşünmek sonra konuşmak.
+Önce okumak sonra yazmak.
+Ben biraz su istiyor.
+Ben biraz çay istiyor.
+Ben biraz ekmek istiyor.
+Ben biraz dinlenme istiyor.
+Ben biraz yardım istiyor.
+Ben biraz zaman istiyor.
+Biraz daha su istiyor.
+Biraz daha çay istiyor.
+Biraz daha zaman istiyor.
+Biraz daha yemek istiyor.
+Çok daha iyi oldu.
+Çok daha kötü oldu.
+Daha çok çalışmak istiyor.
+Daha çok okumak istiyor.
+Daha çok öğrenmek istiyor.
+Daha az stres istiyor.
+Ben hiç kahve sevdi mi.
+Ben hep çay istiyor.
+O hep geç kaldı.
+O hep çok çalıştı.
+O hep yardım etti.
+Köpek hep bahçe kaldı.
+Ben hemen geldi.
+Ben hemen gitti.
+Ben hemen anladı.
+Doktor hemen ilaç verdi.
+Polis hemen geldi.
+Hemşire hemen yardım etti.
+Arkadaş hemen telefon etti.
+Bir kedi bahçe geldi.
+Bir köpek kapı bekledi.
+Bir kuş ağaç gitti.
+İki çocuk park gitti.
+İki kedi süt istedi.
+İki arkadaş kahve istedi.
+Üç kuş ağaç gitti.
+Üç çocuk okul gitti.
+Dört kişi geldi.
+Beş kişi kaldı.
+Altı kişi gitti.
+Yedi gün yağmur sürdü.
+Dokuz kişi yemek yedi.
+On kişi soru sordu.
+Saat sekiz okul başladı.
+Saat dokuz iş başladı.
+Saat on doktor geldi.
+Saat beş iş bitirdi.
+Saat altı ev geldi.
+Saat yedi yemek yedi.
+İki saat sürdü.
+Üç saat sürdü.
+Bir saat bekledi.
+İki saat bekledi.
+Uzun süre bekledi.
+Kısa süre bekledi.
+Kırmızı elma aldı.
+Mavi gök gördü.
+Mavi deniz gördü.
+Yeşil yaprak gördü.
+Sarı yaprak gördü.
+Sarı kedi gördü.
+Beyaz kedi gördü.
+Siyah köpek gördü.
+Kahverengi köpek gördü.
+Gri kedi gördü.
+Mor çiçek aldı.
+Pembe çiçek aldı.
+Turuncu kedi sevdi.
+Lacivert kumaş aldı.
+Turkuaz deniz gördü.
+Beyaz bulut gördü.
+Siyah bulut geldi.
+Kırmızı renk sevdi.
+Mavi renk sevdi.
+Yeşil renk sevdi.
+Sarı renk sevdi.
+Mor renk sevdi.
+Siyah renk sevdi.
+Beyaz renk sevdi.
+Altın çok pahalı.
+Gümüş çok pahalı.
+Bakır çok ucuz.
+Demir çok sert.
+Çelik çok sert.
+Ahşap çok sıcak.
+Plastik çok ucuz.
+Kumaş çok yumuşak.
+Pamuk çok yumuşak.
+Yün çok sıcak.
+İpek çok pahalı.
+Deri çok pahalı.
+Taş çok soğuk.
+Teknoloji çok hızlı gelişmek.
+Teknoloji çok önemli.
+Yazılım çok önemli.
+Yazılım test yaptı.
+Donanım çok pahalı.
+Donanım çok eski.
+Sistem çalıştı mı.
+Sistem çok eski.
+Sistem çok yeni.
+Güvenlik çok önemli.
+Erişim çok kolay.
+Erişim çok zor.
+Bağlantı çok yavaş.
+Bağlantı çok hızlı.
+Site çok yavaş.
+Site çok hızlı.
+Platform çok büyük.
+Forum çok aktif.
+Blog yazmak istiyor.
+Blog çok iyi.
+Web site yaptı.
+Eposta çok uzun.
+Link çok uzun.
+Sayfa çok uzun.
+Liste çok uzun.
+Liste çok kısa.
+Tablo çok büyük.
+Grafik çok iyi.
+Grafik çok karmaşık.
+Model çok büyük.
+Model çok iyi.
+Analiz çok uzun sürdü.
+Analiz çok önemli.
+Test çok uzun sürdü.
+Test çok kısa sürdü.
+Test çok kolay.
+Test çok zor.
+Veri çok fazla.
+Veri çok az.
+Veri çok önemli.
+İstatistik çok önemli.
+Rapor çok kısa.
+Raporlama çok önemli.
+Ölçüm çok önemli.
+Değerlendirme çok uzun sürdü.
+Performans çok iyi.
+Performans çok kötü.
+Hız çok önemli.
+Hız çok yüksek.
+Hız çok düşük.
+Otomasyon çok önemli.
+Optimizasyon çok zor.
+Entegrasyon çok uzun sürdü.
+Kullanıcı çok fazla.
+Kullanıcı çok az.
+Kullanıcı yorum yazdı.
+Kullanıcı şikayet etti.
+Kullanıcı yardım istedi.
+Abonelik çok pahalı.
+Abonelik çok ucuz.
+Beğeni çok fazla.
+Paylaşım çok fazla.
+Medya çok önemli.
+Sosyal medya çok önemli.
+Haber çok kötü.
+Haber çok iyi.
+Haber çok önemli.
+İletişim çok önemli.
+Haberleşme çok önemli.
+Toplum çok önemli.
+Kültür çok önemli.
+Dil çok önemli.
+Din çok önemli.
+Hukuk çok önemli.
+Kanun çok önemli.
+Kural çok önemli.
+Kural çok basit.
+Yasa çok yeni.
+Adalet çok önemli değer.
+Eşitlik çok önemli.
+Özgürlük çok önemli.
+Bağımsızlık çok önemli.
+Barış çok iyi.
+Savaş çok kötü.
+Kötülük çok kötü.
+İyilik çok iyi.
+Merhamet çok önemli.
+Şefkat çok önemli.
+Ahlak çok önemli.
+Erdem çok önemli.
+Sorumluluk çok önemli.
+Sorumluluk çok büyük.
+Emek çok önemli.
+Çaba çok önemli.
+Azim çok önemli.
+Dürüst insan çok önemli.
+Güven çok zor.
+Sevgi çok büyük.
+Nefret çok kötü.
+Öfke çok kötü.
+Korku çok kötü.
+Üzüntü çok kötü.
+Şüphe çok kötü.
+Duygu çok önemli.
+İnanç çok önemli.
+Mutluluk çok önemli.
+Doğa çok önemli.
+Doğa çok büyük.
+Çevre çok önemli.
+Orman çok önemli.
+Ağaç çok önemli.
+Toprak çok önemli.
+Tohum çok küçük.
+Bitki su istiyor.
+Çiçek su istiyor.
+Ağaç su istiyor.
+Bahçe su istiyor.
+Tarla su istiyor.
+Çim su istiyor.
+Ben çiçek dikmek istiyor.
+Ben ağaç dikmek istiyor.
+Ben çim biçmek istiyor.
+Ben yün örmek istiyor.
+Ben duvar boyamak istiyor.
+Ben kapı boyamak istiyor.
+Ben resim yapmak istiyor.
+Ben yemek yapmak istiyor.
+Ben çorba yapmak istiyor.
+Ben pasta yapmak istiyor.
+Ben kek yapmak istiyor.
+Ben börek yapmak istiyor.
+Ben salata yapmak istiyor.
+Ben makarna yapmak istiyor.
+Ben pilav yapmak istiyor.
+Ben çay yapmak istiyor.
+Ben kahve yapmak istiyor.
+Ben yeni şey öğrenmek istiyor.
+Ben yeni dil öğrenmek istiyor.
+Ben çocuk öğretmek istiyor.
+Ben kitap yazmak istiyor.
+Ben blog yazmak istiyor.
+Ben kod yazmak istiyor.
+Ben program yazmak istiyor.
+Ben dosya silmek istiyor.
+Ben yeni ev almak istiyor.
+Ben yeni telefon almak istiyor.
+Ben deniz görmek istiyor.
+Ben dağ görmek istiyor.
+Ben orman görmek istiyor.
+Ben arkadaş görmek istiyor.
+Ben komşu görmek istiyor.
+Ben doktor görmek istiyor.
+Ben haber duymak istiyor.
+Ben müzik duymak istiyor.
+Ben çok yaşamak istiyor.
+Ben köy yaşamak istiyor.
+Ben şehir yaşamak istiyor.
+Ben deniz yüzmek istiyor.
+Ben göl yüzmek istiyor.
+Ben park yürümek istiyor.
+Ben orman yürümek istiyor.
+Ben park koşmak istiyor.
+Ben çok uçmak istiyor gibi.
+Ben oyun kazanmak istiyor.
+Ben para kazanmak istiyor.
+Ben iş bitirmek istiyor.
+Ben iş başlamak istiyor.
+Ben iş bulmak istiyor.
+Ben çözüm bulmak istiyor.
+Ben anlatmak istiyor.
+Ben anlamak istiyor.
+Ben düşünmek istiyor.
+Ben söylemek istiyor.
+Ben sormak istiyor.
+Ben bilmek istiyor.
+Ben beklemek istiyor.
+Ben kalmak istiyor.
+Ben gitmek istiyor.
+Ben bakmak istiyor.
+Ben seçmek istiyor.
+Ben kullanmak istiyor.
+Ben çıkmak istiyor.
+Ben girmek istiyor.
+Ben kalkmak istiyor.
+Ben yatmak istiyor.
+Ben dinlemek istiyor.
+Ben çalışmak istiyor.
+Ben korumak istiyor.
+Ben taşımak istiyor.
+Ben bırakmak istiyor.
+Ben vermek istiyor.
+Ben almak istiyor.
