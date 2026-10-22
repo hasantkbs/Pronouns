@@ -21,7 +21,7 @@ import config
 from src.cli import evaluate_sentences as ev
 from src.training import sentence_synth as ss
 
-EVAL_SENTENCES = Path("datasets") / "sentence_sets" / "sentetik_olcum.txt"
+EVAL_SENTENCES = ss.EVAL_SENTENCES
 WORDS = "kelime"
 SENTENCES = "sentetik_cumle"
 THRESHOLD = 0.05

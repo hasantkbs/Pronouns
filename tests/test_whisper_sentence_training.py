@@ -102,3 +102,55 @@ def test_side_report_is_not_picked_up_as_the_live_training_report(tmp_path):
     assert out.name == "whisper_side_FurkanV1_whisper_cumle_20261022_010203.json"
     assert json.loads(out.read_text(encoding="utf-8")) == {"final_wer": 0.1}
     assert not list(tmp_path.glob("training_FurkanV1_*.json"))
+
+
+def test_eval_manifest_ignores_stale_synthetic_audio(tmp_path):
+    # Kaynak damgası olmayan (ya da eski eval.csv'den üretilmiş) sesler tur seçimine girmez
+    out = tmp_path / "synthetic_eval"
+    out.mkdir()
+    (out / "manifest.csv").write_text(
+        "file_path,transcription\nsynthetic_eval/s001_1.wav,Kedi süt istedi.\n", encoding="utf-8"
+    )
+    (tmp_path / "eval.csv").write_text("file_path,transcript\n", encoding="utf-8")
+    assert tw.eval_manifest(tmp_path) == []
+
+
+def _wer(predictions, references):
+    wrong = sum(p != r for p, r in zip(predictions, references))
+    return wrong / len(references)
+
+
+def test_eval_metrics_reports_combined_word_and_sentence_separately():
+    preds = ["kedi", "süt", "kedi süt istedi", "çocuk"]
+    refs = ["kedi", "sut", "kedi süt istedi", "çocuk okul gitti"]
+    out = tw.eval_metrics(preds, refs, n_words=2, wer=_wer, cer=_wer)
+    assert out["wer"] == pytest.approx(2 / 4)
+    assert out["word_wer"] == pytest.approx(1 / 2)
+    assert out["sentence_wer"] == pytest.approx(1 / 2)
+
+
+def test_eval_metrics_without_synthetic_rows_has_no_sentence_key():
+    out = tw.eval_metrics(["kedi"], ["kedi"], n_words=1, wer=_wer, cer=_wer)
+    assert out["wer"] == 0.0 and out["word_wer"] == 0.0
+    assert "sentence_wer" not in out
+
+
+def test_eval_metrics_all_empty_references():
+    assert tw.eval_metrics(["x"], [" "], n_words=1, wer=_wer, cer=_wer) == {"wer": 1.0, "cer": 1.0}
+
+
+def test_report_wers_uses_word_only_wer_for_the_settings_card():
+    # Ayarlar'daki "son WER" canlı modelin kelime doğruluğu olarak kalmalı
+    metrics = {"eval_wer": 0.17, "eval_cer": 0.11, "eval_word_wer": 0.15, "eval_word_cer": 0.10,
+               "eval_sentence_wer": 0.2, "eval_sentence_cer": 0.12}
+    assert tw.report_wers(metrics) == {
+        "final_wer": 0.15, "final_cer": 0.10,
+        "synthetic_sentence_wer": 0.2, "synthetic_sentence_cer": 0.12,
+    }
+
+
+def test_report_wers_without_split_metrics_falls_back_to_combined():
+    assert tw.report_wers({"eval_wer": 0.2, "eval_cer": 0.1}) == {
+        "final_wer": 0.2, "final_cer": 0.1,
+        "synthetic_sentence_wer": None, "synthetic_sentence_cer": None,
+    }

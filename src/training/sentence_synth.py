@@ -7,6 +7,7 @@ kırpılır, tepe genliği eşitlenir ve kelimeler kısa, rastgele duraklarla
 birleştirilir. Ölçüm sesleri eval.csv'den, eğitim sesleri train.csv'den
 üretilir; böylece ölçülen ses eğitimde hiç duyulmaz.
 """
+import hashlib
 import random
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -117,6 +118,8 @@ def build_sentence(
 SYNTH_EVAL_DIR = "synthetic_eval"
 MANIFEST = "manifest.csv"
 SKIPPED = "skipped.txt"
+SOURCES = "sources.sha1"
+EVAL_SENTENCES = Path("datasets") / "sentence_sets" / "sentetik_olcum.txt"
 
 
 def read_manifest(user_dir) -> List[Dict[str, str]]:
@@ -128,6 +131,28 @@ def read_manifest(user_dir) -> List[Dict[str, str]]:
     return df.to_dict("records")
 
 
+def source_fingerprint(user_dir, sentences_path) -> str:
+    """Ölçüm seslerinin kaynağı: eval.csv + cümle dosyası. Biri değişirse sesler bayattır."""
+    digest = hashlib.sha1()
+    digest.update((Path(user_dir) / "eval.csv").read_bytes())
+    digest.update(Path(sentences_path).read_bytes())
+    return digest.hexdigest()
+
+
+def current_manifest(user_dir, sentences_path) -> List[Dict[str, str]]:
+    """
+    Manifest satırları yalnızca sesler bugünkü eval.csv ve cümle dosyasından
+    üretildiyse; aksi halde []. eval.csv yeniden bölününce eski sesler eğitim
+    kayıtlarından olabilir ve ölçüm sızdırır.
+    """
+    stamp = Path(user_dir) / SYNTH_EVAL_DIR / SOURCES
+    if not stamp.exists() or not (Path(user_dir) / "eval.csv").exists():
+        return []
+    if stamp.read_text(encoding="utf-8").strip() != source_fingerprint(user_dir, sentences_path):
+        return []
+    return read_manifest(user_dir)
+
+
 def ensure_eval_set(
     user_dir,
     sentences_path,
@@ -136,14 +161,15 @@ def ensure_eval_set(
     sr: int = config.ORNEKLEME_ORANI,
 ) -> Tuple[List[Dict[str, str]], List[str]]:
     """
-    Sabit sentetik ölçüm seslerini döndürür; yoksa eval.csv kayıtlarından bir kez üretir.
-    Manifest en son yazılır: üretim yarıda kalırsa bir sonraki çağrı baştan üretir.
+    Sabit sentetik ölçüm seslerini döndürür; yoksa ya da eval.csv / cümle dosyası
+    değiştiyse eval.csv kayıtlarından yeniden üretir. Manifest en son yazılır:
+    üretim yarıda kalırsa bir sonraki çağrı baştan üretir.
     """
     import soundfile as sf
 
     user_dir = Path(user_dir)
     out_dir = user_dir / SYNTH_EVAL_DIR
-    rows = read_manifest(user_dir)
+    rows = current_manifest(user_dir, sentences_path)
     if rows:
         skipped_path = out_dir / SKIPPED
         skipped = read_sentences(skipped_path) if skipped_path.exists() else []
@@ -155,6 +181,9 @@ def ensure_eval_set(
     usable_set = set(usable)
     rng = random.Random(seed)
     out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / MANIFEST).unlink(missing_ok=True)
+    for old in out_dir.glob("*.wav"):
+        old.unlink()
     rows = []
     for index, sentence in enumerate(sentences, start=1):
         if sentence not in usable_set:
@@ -165,6 +194,7 @@ def ensure_eval_set(
             sf.write(str(user_dir / rel), audio, sr)
             rows.append({"file_path": rel, "transcription": sentence})
     (out_dir / SKIPPED).write_text("".join(f"{s}\n" for s in skipped), encoding="utf-8")
+    (out_dir / SOURCES).write_text(source_fingerprint(user_dir, sentences_path), encoding="utf-8")
     pd.DataFrame(rows, columns=["file_path", "transcription"]).to_csv(
         out_dir / MANIFEST, index=False, encoding="utf-8"
     )

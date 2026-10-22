@@ -178,3 +178,27 @@ def test_ensure_eval_set_same_seed_same_audio(tmp_path):
 
 def test_read_manifest_without_eval_set_is_empty(tmp_path):
     assert ss.read_manifest(tmp_path) == []
+
+
+def test_ensure_eval_set_regenerates_when_eval_csv_changes(tmp_path):
+    # eval.csv yeniden bölünürse eski sesler artık eğitimdeki kayıtlardan olabilir (sızıntı)
+    user, sentences = _eval_user(tmp_path)
+    ss.ensure_eval_set(user, sentences, seed=1)
+    lines = (user / "eval.csv").read_text(encoding="utf-8").splitlines()
+    (user / "eval.csv").write_text("\n".join(l for l in lines if "süt" not in l) + "\n", encoding="utf-8")
+
+    rows, skipped = ss.ensure_eval_set(user, sentences, seed=1)
+
+    assert rows == []
+    assert skipped == ["Kedi süt istedi.", "Kedi uçak istedi.", "Süt istedi kedi."]
+    assert not list((user / "synthetic_eval").glob("*.wav"))
+
+
+def test_current_manifest_requires_matching_sources(tmp_path):
+    user, sentences = _eval_user(tmp_path)
+    assert ss.current_manifest(user, sentences) == []
+    rows, _ = ss.ensure_eval_set(user, sentences)
+    assert ss.current_manifest(user, sentences) == rows
+
+    sentences.write_text("Kedi süt istedi.\n", encoding="utf-8")
+    assert ss.current_manifest(user, sentences) == []

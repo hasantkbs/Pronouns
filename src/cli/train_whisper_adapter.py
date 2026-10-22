@@ -103,6 +103,50 @@ def build_eval_frame(words_df, manifest_rows, user_dir):
     return pd.concat([words, synthetic], ignore_index=True)
 
 
+def eval_manifest(user_dir):
+    """Tur sonu ölçümüne girecek sentetik sesler; bugünkü eval.csv'den üretilmemişse []."""
+    if not ss.EVAL_SENTENCES.exists():
+        return []
+    return ss.current_manifest(user_dir, ss.EVAL_SENTENCES)
+
+
+def eval_metrics(pred_str, label_str, n_words, wer, cer):
+    """
+    Birleşik wer/cer (en iyi tur seçimi) + kelime (ilk n_words satır) ve
+    sentetik cümle (geri kalan) ayrı ayrı. Ölçüm sırası korunur: build_eval_frame
+    önce kelimeleri, sonra sentetik sesleri koyar; değerlendirme karıştırılmaz.
+    """
+    def score(preds, refs):
+        idx = [i for i, r in enumerate(refs) if r.strip()]
+        if not idx:
+            return None
+        p, r = [preds[i] for i in idx], [refs[i] for i in idx]
+        return wer(predictions=p, references=r), cer(predictions=p, references=r)
+
+    combined = score(pred_str, label_str)
+    if combined is None:
+        return {"wer": 1.0, "cer": 1.0}
+    out = {"wer": combined[0], "cer": combined[1]}
+    for prefix, preds, refs in (
+        ("word_", pred_str[:n_words], label_str[:n_words]),
+        ("sentence_", pred_str[n_words:], label_str[n_words:]),
+    ):
+        part = score(preds, refs)
+        if part is not None:
+            out[f"{prefix}wer"], out[f"{prefix}cer"] = part
+    return out
+
+
+def report_wers(final_metrics):
+    """Rapordaki final WER kelime ölçümüdür (Ayarlar'daki model kartı bunu gösterir)."""
+    return {
+        "final_wer": final_metrics.get("eval_word_wer", final_metrics.get("eval_wer")),
+        "final_cer": final_metrics.get("eval_word_cer", final_metrics.get("eval_cer")),
+        "synthetic_sentence_wer": final_metrics.get("eval_sentence_wer"),
+        "synthetic_sentence_cer": final_metrics.get("eval_sentence_cer"),
+    }
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Kullanıcıya özel Whisper ASR modelini LoRA ile eğitir.")
     parser.add_argument("user_id", type=str, help="Verisi kullanılacak ve modeli kişiselleştirilecek kullanıcının kimliği.")
@@ -183,6 +227,7 @@ class WhisperPersonalizedTrainer:
         self.train_takes = {}
         self.sentence_train_samples = 0
         self.synthetic_eval_samples = 0
+        self.eval_word_count = 0
 
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.processor = None
@@ -297,7 +342,8 @@ class WhisperPersonalizedTrainer:
         if is_train:
             df = self._with_sentences(df)
         else:
-            manifest = ss.read_manifest(self.user_data_path)
+            manifest = eval_manifest(self.user_data_path)
+            self.eval_word_count = len(df)
             df = build_eval_frame(df, manifest, self.user_data_path)
             self.synthetic_eval_samples = len(manifest)
             if manifest:
@@ -358,16 +404,10 @@ class WhisperPersonalizedTrainer:
         pred_str = [normalize_turkish_text(p) for p in pred_str]
         label_str = [normalize_turkish_text(r) for r in label_str]
 
-        valid_indices = [i for i, r in enumerate(label_str) if r.strip()]
-        if not valid_indices:
-            return {"wer": 1.0, "cer": 1.0}
-
-        final_preds = [pred_str[i] for i in valid_indices]
-        final_refs = [label_str[i] for i in valid_indices]
-
-        wer = self.wer_metric.compute(predictions=final_preds, references=final_refs)
-        cer = self.cer_metric.compute(predictions=final_preds, references=final_refs)
-        return {"wer": wer, "cer": cer}
+        return eval_metrics(
+            pred_str, label_str, self.eval_word_count,
+            wer=self.wer_metric.compute, cer=self.cer_metric.compute,
+        )
 
     def run(self):
         setup_logging(self.user_id)
@@ -466,8 +506,9 @@ class WhisperPersonalizedTrainer:
 
         # load_best_model_at_end=True zaten en iyi checkpoint'i geri yukledigi icin
         # bu evaluate() cagrisinin sonucu = en iyi sonuc; final ve best ayni deger.
-        final_wer = final_metrics.get("eval_wer")
-        final_cer = final_metrics.get("eval_cer")
+        wers = report_wers(final_metrics)
+        final_wer = wers["final_wer"]
+        final_cer = wers["final_cer"]
 
         train_losses = [h["loss"] for h in trainer.state.log_history if "loss" in h]
         eval_losses = [h["eval_loss"] for h in trainer.state.log_history if "eval_loss" in h]
@@ -515,6 +556,9 @@ class WhisperPersonalizedTrainer:
             "output_name": self.output_dir.name,
             "sentence_train_samples": self.sentence_train_samples,
             "synthetic_eval_samples": self.synthetic_eval_samples,
+            "combined_eval_wer": final_metrics.get("eval_wer"),
+            "synthetic_sentence_wer": wers["synthetic_sentence_wer"],
+            "synthetic_sentence_cer": wers["synthetic_sentence_cer"],
         }
         if self.output_name is None:
             report_file = ReportingService().log_training_session(self.user_id, training_data)
