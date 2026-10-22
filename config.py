@@ -76,6 +76,12 @@ NUM_FINETUNE_EPOCHS = 100          # Maksimum limit
 FINETUNE_BATCH_SIZE = 8            # 4'ten 8'e çıkarıldı
 GRADIENT_ACCUMULATION_STEPS = 4    # Toplam batch size 32 (8 * 4) korunuyor
 
+# --- Sentetik cümle eğitimi (B2) ---
+SYNTH_SENTENCE_REPEATS = 2              # Her eğitim cümlesi turda kaç kez (her seferinde farklı ses)
+CONTINUE_EPOCHS = 10                    # --init-from ile devam eğitiminde en fazla tur
+CONTINUE_LEARNING_RATE = 1e-5           # Devam eğitiminde mevcut bilgiyi bozmamak için düşük
+CONTINUE_EARLY_STOPPING_PATIENCE = 3
+
 # --- Anlamli Cumle Kurma Ayarlari ---
 # Kelime tamamlama ve duzeltme esigi (0-1)
 # 0.6: %60 benzerlik gosteren kelimeyi kullanicinin sozrugunden "en yakin" olanla degistirir.
